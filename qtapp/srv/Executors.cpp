@@ -1719,12 +1719,15 @@ void Execute(Executor<ReserveTuner> &exec, const std::string &parentTunerId)
 			Manager::getInstance().addReservation(recordReservation, parentTunerId);
 			Manager::getInstance().setReservationAttributes(recordReservation.getReservationToken(), ReservationAttributes(exec.getClientId()));
 			exec.messageOut = response;
-			{
+			try {
 				Log() << "Sending the message:RL: " << std::endl;
 				std::vector<uint8_t> out;
 				SerializeMessage(exec.messageOut, exec.getClientId(), out);
 				::serverInstance->getConnection(exec.getClientId()).sendAsync(out);
 			}
+            catch (...) {
+                Log() << "Sending the mssage failed" << std::endl;
+            }
 		}
 	}
 	catch(...) {

@@ -890,8 +890,13 @@ bool PendingReserveTunerConflictProcessor::timeout()
             fakeCancelProcessor.timeout();
 	    }
 	    else if (tokens.size() == 0) {
-	    	Log() << "Target Tuner for recording is free now,  no need to cancel live" << std::endl;
+	    	Log() << "Target Tuner for recording is free now,  no need to cancel live, so fake a cancel success and grant Recording" << std::endl;
 	    	Assert(Manager::getInstance().getTuner(parentId).getState().getState() == TunerState::kFree);
+			CancelLive cancelLive(GenerateUUID(), 
+                                  request.getTunerReservation().getServiceLocator(), 
+                                  ""/* use empty token for the fake success*/);
+            PendingCancelLiveProcessor fakeCancelProcessor(Connection::kTrmClientId, cancelLive, request, parentId);
+            fakeCancelProcessor.timeout();
 	    }
 	    else {
 	    	Log() << "Incorrect token number " << tokens.size() << std::endl;
