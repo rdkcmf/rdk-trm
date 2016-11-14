@@ -42,6 +42,9 @@
 #include <QtCore/QTime>
 #include <QtCore/QByteArray>
 #include <QAbstractSocket>
+#ifdef TRM_USE_SSL
+#include <QtNetwork/QSslError>
+#endif
 
 class QWebSocketServer;
 class QWebSocket;
@@ -58,6 +61,9 @@ Q_SIGNALS:
 
 private Q_SLOTS:
 
+#ifdef TRM_USE_SSL
+    void onSslErrors(const QList<QSslError> &errors);
+#endif
     void onNewConnection(void);
     void onWebsocketConnect(void);
     void onWebsocketBinaryMessageReceived(QByteArray byteArray);
