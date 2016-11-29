@@ -1,0 +1,151 @@
+/*
+ * If not stated otherwise in this file or this component's Licenses.txt file the
+ * following copyright and licenses apply:
+ *
+ * Copyright 2016 RDK Management
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+*/
+
+html, body {
+    height: 97%;
+	/*background-color: rgba(0,0,200,.2); */
+	background-color:transparent;
+	/*opacity:0; */
+}
+h1 {
+	margin: 0;
+	text-align:center;
+	margin-top: 0.5em;
+	padding: 0;
+	border: 0;
+	outline: 0;
+	color:black;
+}
+
+td, th, tr{
+	border: 1px solid black;
+	font-size: 1.3em;
+}
+tr, td {
+	height: 3em;
+}
+
+th {
+	height:1.5em;
+}
+.Trm-Tuner-Id {
+	width:8em;
+}
+.Trm-Tuner-Usage {
+	display:table-flex;
+	justify-content:center;
+	align-content: center;
+	width:6.2em;
+
+}
+.Trm-Tuner-Channel-Name {
+	display:table-flex;
+	justify-content:center;
+	width:9em;
+}
+
+.Trm-Tuner-Device{
+	width:10em;
+}
+
+.Trm-Tuner-Usage-Image {
+	height:60px;
+	width:60px;
+}
+table[class*="Tuner-Table"] {
+	background-color:white;
+	/*width:1024px;
+	height:768px;*/
+	width:75%;
+	height:85%;
+	margin-left: auto;
+    margin-right: auto;
+	padding: 10px;
+}
+.Tuner-Table-No-Info {
+	visibility:hidden;
+}
+
+.Tuner-Table-With-Info {
+	visibility:visible;
+}
+
+.selected {
+    background: blue;
+}
+
+.unselected {
+	border: 1px solid black;
+    background: white;
+}
+.TRM-Diag-Page{
+} 
+.Current-Page {
+}
+
+.Other-Page {
+	display:none;
+}
+
+.TRM-Device {
+	
+}
+.pagenum {
+	position:absolute;
+	right:3em;
+	font-size: 1em;
+
+}
+
+.state_container {
+}
+
+[class*=circle] {
+	width:3em;
+	height:3em;
+	border-width:0.2em;
+	border-radius:5.2em;
+	border-style: solid;
+	border-color: #000;
+	display:table-cell;
+	background-color:white;
+	opacity:1;
+}
+.red-circle {
+	background:#FF0000;
+}
+
+.green-circle {
+	background:#00FF00;
+}
+
+.white-circle {
+	background:#FFFFFF;
+}
+
+.channel-image {
+	justify-content:center;
+	align-items:center;
+	height:3em;
+	width:3em;
+	padding-left: 3em;
+}
+p{
+	visibility:hidden;
+}

@@ -1,0 +1,31 @@
+##########################################################################
+# If not stated otherwise in this file or this component's Licenses.txt
+# file the following copyright and licenses apply:
+#
+# Copyright 2016 RDK Management
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+##########################################################################
+Package: libtrm0
+Version: 1.99+gitr1+1d6bcd2a64-r0.0
+Description: This receipe compiles rmfcore code base. This has interface clasess that would be necessary for all the mediaplayers
+ This receipe compiles rmfcore code base. This has interface clasess that
+ would be necessary for all the mediaplayers.
+Section: console/utils
+Priority: optional
+Maintainer: CPE SI Yocto Team <CCP_CPESI-YOCTO@cable.comcast.com>
+License: CLOSED
+Architecture: mips32el
+OE: trm-common
+Depends: libgcc1 (>= 4.8.2), librdkloggers0 (>= 1.99+gitr0+028d137df2), libc6 (>= 2.19), libstdc++6 (>= 4.8.2), libglib-2.0-0 (>= 2.38.2), libjansson4 (>= 2.4), libuuid1 (>= 2.24.1)
+Source: git://gerrit.teamccp.com:29418/rdk/components/generic/trm/generic;protocol=ssh;branch=master
