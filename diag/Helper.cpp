@@ -433,7 +433,7 @@ bool TRMMgrHelperImpl::getTRMConnectionEventList(uint32_t *length,char *response
 		
 		DIAG_WARN(("No Event to Send ...\r\n"));
 		*length = 0;
-    	return false;
+    	return true;
     }
 	
    	/* Get the UUID and Response Message */
@@ -907,14 +907,14 @@ static bool url_request_post( const char *payload, int payload_length, unsigned 
  * @brief This function waits for TRM respnse */
 static bool waitForTRMResponse()
 {
-    int retry_count = 10;
+    int retry_count = 500;
 
     DIAG_TRACE(("Enter %s():%d \r\n" , __FUNCTION__, __LINE__));
 
     while ((false == TrmResponseRcvd) && (retry_count > 0))
     {
 		DIAG_DEBUG(("%s():%d ..and loop ..\r\n", __FUNCTION__, __LINE__));
-		usleep(500*1000);
+		usleep(10*1000);
 		retry_count --;
     }
 
