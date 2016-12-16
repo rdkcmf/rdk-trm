@@ -49,6 +49,9 @@
 TRM_BEGIN_NAMESPACE
 
 #define TRM_USE_CUSTOM_ATTRIBUTES 1
+#ifdef USE_AUTHSERVICE_STUB
+#define DUMMY_DEVICE_ID           "P0123456789"
+#endif
 
 std::map<std::string, ServiceAttributes> ServiceAttributes::attributes;
 
@@ -2081,6 +2084,7 @@ int JsonDecode(const std::vector<uint8_t> &in, GenerateAuthTokenResponseFromAuth
 
 std::string GetDeviceId()
 {
+#ifndef USE_AUTHSERVICE_STUB
     static std::string deviceId;
     if (!deviceId.empty()) return deviceId;
 
@@ -2106,6 +2110,10 @@ std::string GetDeviceId()
         deviceId = response.deviceId;
     }
     return deviceId;
+#else
+    Log() << "Dummy::DeviceId = [" << DUMMY_DEVICE_ID << "]" << std::endl;
+    return DUMMY_DEVICE_ID;
+#endif
 }
 
 
