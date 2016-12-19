@@ -46,7 +46,7 @@
 #include <QSslCipher>
 
 #ifndef TRM_ENC_SSL_CERT_PATH
-#define TRM_ENC_SSL_CERT_PATH "/etc/ssl/trm/"
+#define TRM_ENC_SSL_CERT_PATH "/etc/ssl/trmserver/"
 #endif
 
 #ifndef TRM_DEC_SSL_CERT_PATH

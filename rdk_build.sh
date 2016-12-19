@@ -131,6 +131,11 @@ function configure()
 
 function clean()
 {
+    if [ $RDK_PLATFORM_SOC = "intel" ]; then
+        if [ $RDK_PLATFORM_DEVICE = "xg1" ]; then
+            rm -r $RDK_FSROOT_PATH/etc/ssl/trmserver/*
+        fi
+    fi
     true #use this function to provide instructions to clean workspace
 }
 
@@ -224,6 +229,12 @@ function rebuild()
 function install()
 {
     cd ${RDK_SOURCE_PATH}
+    if [ $RDK_PLATFORM_SOC = "intel" ]; then
+        if [ $RDK_PLATFORM_DEVICE = "xg1" ]; then
+            mkdir -p $RDK_FSROOT_PATH/etc/ssl/trmserver/
+            cp wsproxy/sslcerts/* $RDK_FSROOT_PATH/etc/ssl/trmserver/
+       fi
+    fi
     cp -f install/lib/*.so $RDK_FSROOT_PATH/usr/local/lib 
 	cp -f install/bin/* $RDK_FSROOT_PATH/usr/local/bin
 
