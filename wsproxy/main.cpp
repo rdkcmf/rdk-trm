@@ -516,7 +516,7 @@ int main(int argc, char *argv[])
 
 
 
-#define TRM_WS_PROXY_LISTENING_PORT 9988
+#define TRM_WS_PROXY_LISTENING_PORT 9989
 
     //Initiate utilities
     pthread_mutex_init(&conn_mutex, NULL);

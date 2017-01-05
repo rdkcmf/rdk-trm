@@ -39,6 +39,7 @@
 #include <QtWebSockets/QWebSocketServer>
 #include <QtWebSockets/QWebSocket>
 
+#ifdef TRM_USE_SSL
 #include <QtCore/QFile>
 #include <QtNetwork/QSslCertificate>
 #include <QtNetwork/QSslKey>
@@ -66,6 +67,7 @@
 
 #define DEC_COMMAND "configparamgen jx"
 
+#endif  // TRM_USE_SSL
 
 #include "qt_websocketproxy.h"
 extern int  begin_request_callback(void *conn);
@@ -145,6 +147,7 @@ void PingPongTask::onPong(quint64 elapsedTime, QByteArray)
     retry = 0;
 }
 
+#ifdef TRM_USE_SSL
 
 /* Function to execute system command */
 static int exec_sys_command(char* cmd)
@@ -222,6 +225,7 @@ static int deleteCertAndKeys(void)
 
 	return ret;
 }
+#endif  // TRM_USE_SSL
 
 
 WebSocketProxy::WebSocketProxy(const QStringList &boundIPs, quint16 port, QObject *parent) :
@@ -229,7 +233,13 @@ WebSocketProxy::WebSocketProxy(const QStringList &boundIPs, quint16 port, QObjec
 {
 	QStringList::const_iterator it = boundIPs.constBegin();
 	while (it != boundIPs.constEnd()) {
+		//proxyServer = new QWebSocketServer("TRM WebsocketProxy", QWebSocketServer::NON_SECURE_MODE, this);
 		if (proxyServers.constFind(*it) == proxyServers.constEnd()) {
+#ifndef TRM_USE_SSL
+			QWebSocketServer *proxyServer = new QWebSocketServer(
+					QString("TRM WebsocketServer IP: ") + *it,
+					QWebSocketServer::NonSecureMode, this);
+#else
 			implodeCertAndKeys();
 			QString certFolderPath(TRM_DEC_SSL_CERT_PATH);
 			QString certFileName(TRM_SERV_CERT_NAME);
@@ -237,14 +247,7 @@ WebSocketProxy::WebSocketProxy(const QStringList &boundIPs, quint16 port, QObjec
 			QFile certFile(certFolderPath+certFileName);
 			QFile keyFile(certFolderPath+keyFileName);
 			certFile.open(QIODevice::ReadOnly);
-			bool isKeyFileOpen =  keyFile.open(QIODevice::ReadOnly);
-			if(isKeyFileOpen == false)
-			{
-				std::cout << "Server private key not exist. Don't start the server ";
-				certFile.close();
-				keyFile.close();
-				break;
-			}
+			keyFile.open(QIODevice::ReadOnly);
 			QSslCertificate certificate(&certFile, QSsl::Pem);
 			QSslKey sslKey(&keyFile, QSsl::Rsa, QSsl::Pem,QSsl::PrivateKey,QByteArray("Amit"));
 			certFile.close();
@@ -261,11 +264,12 @@ WebSocketProxy::WebSocketProxy(const QStringList &boundIPs, quint16 port, QObjec
                         QList<QSslCertificate> caCerts = QSslCertificate::fromPath(certFolderPath+caChainFileName);
 
 			sslConfiguration.setCaCertificates(caCerts);
-			QWebSocketServer *proxyServer = new QWebSocketServer(QString("TRM SecureMode WebsocketServer IP: ") + *it , QWebSocketServer::SecureMode, this);
+			QWebSocketServer *proxyServer = new QWebSocketServer(QString("TRM WebsocketServer IP: ") + *it , QWebSocketServer::SecureMode, this);
 
 			proxyServer->setSslConfiguration(sslConfiguration);
 			deleteCertAndKeys();
 
+#endif  //TRM_USE_SSL
 			std::cout << "TRM WebsocketProxy " <<(*it).toUtf8().data() <<std::endl;
 			if (proxyServer->listen(QHostAddress(*it), port)) {
 				__TIMESTAMP()
@@ -298,44 +302,6 @@ WebSocketProxy::WebSocketProxy(const QStringList &boundIPs, quint16 port, QObjec
 
 		++it;
 	}
-
-	///non secure connection on port 9988
-	port--;
-
-	// Temp Code added to support non secure TRM connection. This should be removed once all XI device updated
-	// with secure connection capability.
-	QStringList::const_iterator itr = boundIPs.constBegin();
-	while (itr != boundIPs.constEnd()) {
-			QWebSocketServer *proxyServer = new QWebSocketServer(
-					QString("TRM NonSecureMode WebsocketServer IP: ") + *itr,
-					QWebSocketServer::NonSecureMode, this);
-			std::cout << "TRM WebsocketProxy " <<(*itr).toUtf8().data() <<std::endl;
-			if (proxyServer->listen(QHostAddress(*itr), port)) {
-				__TIMESTAMP()
-				;
-
-				connect(proxyServer, SIGNAL(newConnection()), this,
-						SLOT(onNewConnection()));
-				connect(proxyServer, SIGNAL(onSslErrors()), this,
-						SLOT(onSslErrors()));
-				proxyServers[*itr] = proxyServer;
-				if (proxyServer->secureMode() == QWebSocketServer::SecureMode) {
-					__TIMESTAMP()
-					;
-					std::cout << "TRM WebsocketProxy sslMode SecureMode"
-							<< std::endl;
-				} else {
-					__TIMESTAMP()
-					;
-					std::cout << "TRM WebsocketProxy sslMode NonSecureMode"
-							<< std::endl;
-				}
-
-			}
-
-		++itr;
-	}
-
 	m_proxy = this;
 }
 
