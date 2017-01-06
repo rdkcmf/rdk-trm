@@ -227,6 +227,7 @@ static int deleteCertAndKeys(void)
 WebSocketProxy::WebSocketProxy(const QStringList &boundIPs, quint16 port, QObject *parent) :
     QObject(parent), proxyServers(), connections()
 {
+#ifdef TRM_USE_SSL
 	QStringList::const_iterator it = boundIPs.constBegin();
 	while (it != boundIPs.constEnd()) {
 		if (proxyServers.constFind(*it) == proxyServers.constEnd()) {
@@ -298,7 +299,7 @@ WebSocketProxy::WebSocketProxy(const QStringList &boundIPs, quint16 port, QObjec
 
 		++it;
 	}
-
+#endif
 	///non secure connection on port 9988
 	port--;
 
