@@ -23,6 +23,7 @@ After=lighttpd.service network-online.target trm-srv.service moca.service
 Requires=network-online.target trm-srv.service
 
 [Service]
+ExecStartPre=-/bin/sh /usr/bin/trmProxyServerSetup.sh
 ExecStart=/usr/bin/websocket-trm-proxy 127.0.0.1 9987 --debugconfig /etc/debug.ini
 ExecStop=/bin/kill -15 $MAINPID
 Restart=always
