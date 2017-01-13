@@ -43,28 +43,12 @@
 #include <QtNetwork/QSslCertificate>
 #include <QtNetwork/QSslKey>
 #include <QSslCipher>
+#include <QSettings>
 
-#ifndef TRM_ENC_SSL_CERT_PATH
-#define TRM_ENC_SSL_CERT_PATH "/etc/ssl/trmserver/"
-#endif
-
-#ifndef TRM_DEC_SSL_CERT_PATH
-#define TRM_DEC_SSL_CERT_PATH "/opt/trmssl/"
-#endif
-
-#ifndef TRM_SERV_PRIV_KEY_NAME
-#define TRM_SERV_PRIV_KEY_NAME "ovspyvqvo.uoy"
-#endif
-
-#ifndef TRM_SERV_CERT_NAME
-#define TRM_SERV_CERT_NAME "rcavljvjf.wwk"
-#endif
-
-#ifndef TRM_CA_CHAIN_CERT_NAME
-#define TRM_CA_CHAIN_CERT_NAME "aochpyukq.lzb"
-#endif
-
-#define DEC_COMMAND "configparamgen jx"
+const char* trmPropertiesPath ="/etc/trmProxySetup.properties";
+const char* caKeyTagName = "CA_CHAIN_CERTIFICATE";
+const char* privateKeyTagName = "CA_SERVER_PRIVATE_KEY";
+const char* publicKeyTagName = "CA_SERVER_PUBLIC_CERTIFICATE";
 
 
 #include "qt_websocketproxy.h"
@@ -166,139 +150,87 @@ static int exec_sys_command(char* cmd)
   return 0;
 }
 
-static int implodeCertAndKeys(void)
-{
-	char cmd[256];
-	int ret = 0;
-
-	sprintf(cmd, "%s %s", "mkdir -p ", TRM_DEC_SSL_CERT_PATH);
-	ret = exec_sys_command(cmd);
-	if (ret != 0) {
-	    std::cout << "execute system command " << cmd << std::endl;
-		return ret;
-	}
-	/* ca cert */
-	sprintf(cmd, "%s %s%s %s%s", DEC_COMMAND,
-	TRM_ENC_SSL_CERT_PATH, TRM_CA_CHAIN_CERT_NAME,
-	TRM_DEC_SSL_CERT_PATH, TRM_CA_CHAIN_CERT_NAME);
-	ret = exec_sys_command(cmd);
-	if (ret != 0) {
-	    std::cout << "execute system command " << cmd << std::endl;
-		return ret;
-	}
-	/* device cert */
-	sprintf(cmd, "%s %s%s %s%s", DEC_COMMAND,
-	TRM_ENC_SSL_CERT_PATH, TRM_SERV_CERT_NAME,
-	TRM_DEC_SSL_CERT_PATH, TRM_SERV_CERT_NAME);
-	ret = exec_sys_command(cmd);
-	if (ret != 0) {
-	    std::cout << "execute system command " << cmd << std::endl;
-		return ret;
-	}
-	/* device key */
-	sprintf(cmd, "%s %s%s %s%s", DEC_COMMAND,
-	TRM_ENC_SSL_CERT_PATH, TRM_SERV_PRIV_KEY_NAME,
-	TRM_DEC_SSL_CERT_PATH, TRM_SERV_PRIV_KEY_NAME);
-	ret = exec_sys_command(cmd);
-	if (ret != 0) {
-	    std::cout << "execute system command " << cmd << std::endl;
-		return ret;
-	}
-
-	return ret;
-}
-
-static int deleteCertAndKeys(void)
-{
-	char cmd[256];
-	int ret = 0;
-
-	sprintf(cmd, "%s %s", "rm -rf  ", TRM_DEC_SSL_CERT_PATH);
-	ret = exec_sys_command(cmd);
-	if (ret != 0) {
-	    std::cout << "execute system command " << cmd << std::endl;
-		return ret;
-	}
-
-	return ret;
-}
-
 
 WebSocketProxy::WebSocketProxy(const QStringList &boundIPs, quint16 port, QObject *parent) :
     QObject(parent), proxyServers(), connections()
 {
 #ifdef TRM_USE_SSL
-	QStringList::const_iterator it = boundIPs.constBegin();
-	while (it != boundIPs.constEnd()) {
-		if (proxyServers.constFind(*it) == proxyServers.constEnd()) {
-			implodeCertAndKeys();
-			QString certFolderPath(TRM_DEC_SSL_CERT_PATH);
-			QString certFileName(TRM_SERV_CERT_NAME);
-			QString keyFileName(TRM_SERV_PRIV_KEY_NAME);
-			QFile certFile(certFolderPath+certFileName);
-			QFile keyFile(certFolderPath+keyFileName);
-			certFile.open(QIODevice::ReadOnly);
-			bool isKeyFileOpen =  keyFile.open(QIODevice::ReadOnly);
-			if(isKeyFileOpen == false)
-			{
-				std::cout << "Server private key not exist. Don't start the server ";
-				certFile.close();
-				keyFile.close();
-				break;
-			}
-			QSslCertificate certificate(&certFile, QSsl::Pem);
-			QSslKey sslKey(&keyFile, QSsl::Rsa, QSsl::Pem,QSsl::PrivateKey,QByteArray("Amit"));
-			certFile.close();
-			keyFile.close();
-			QSslConfiguration sslConfiguration;
+    //Reading TRM configuration file
+    QSettings trmSetting( trmPropertiesPath, QSettings::IniFormat );
+    QString caChainFile = trmSetting.value( caKeyTagName ).toString();
+    QString keyFileName = trmSetting.value( privateKeyTagName  ).toString();
+    QString certFileName = trmSetting.value( publicKeyTagName  ).toString();
+    if(caChainFile.isNull() || keyFileName.isNull() || certFileName.isNull()  )
+    {
+		std::cout << "Missing TRM configuration information";
+    }
+    else
+    {
+        QStringList::const_iterator it = boundIPs.constBegin();
+	    while (it != boundIPs.constEnd())
+	    {
+		    if (proxyServers.constFind(*it) == proxyServers.constEnd())
+		    {
+			    QFile certFile(certFileName);
+			    QFile keyFile(keyFileName);
+			    if(!keyFile.exists())
+			    {
+			        std::cout << "Server private key not exist. Don't start the server ";
+			        break;
+			    }
+			    certFile.open(QIODevice::ReadOnly);
+			    keyFile.open(QIODevice::ReadOnly);
+			    QSslCertificate certificate(&certFile, QSsl::Pem);
+			    QSslKey sslKey(&keyFile, QSsl::Rsa, QSsl::Pem,QSsl::PrivateKey,QByteArray(""));
+			    certFile.close();
+			    keyFile.close();
+			    QSslConfiguration sslConfiguration;
 
-			sslConfiguration.setPeerVerifyMode(QSslSocket::VerifyPeer);
-			sslConfiguration.setLocalCertificate(certificate);
-			sslConfiguration.setPrivateKey(sslKey);
-			sslConfiguration.setProtocol(QSsl::TlsV1SslV3);
-			sslConfiguration.setPeerVerifyDepth(2);
+			    sslConfiguration.setPeerVerifyMode(QSslSocket::VerifyPeer);
+			    sslConfiguration.setLocalCertificate(certificate);
+			    sslConfiguration.setPrivateKey(sslKey);
+			    sslConfiguration.setProtocol(QSsl::TlsV1SslV3);
+			    sslConfiguration.setPeerVerifyDepth(2);
 
-			QString caChainFileName(TRM_CA_CHAIN_CERT_NAME);
-                        QList<QSslCertificate> caCerts = QSslCertificate::fromPath(certFolderPath+caChainFileName);
+			    QList<QSslCertificate> caCerts = QSslCertificate::fromPath(caChainFile);
 
-			sslConfiguration.setCaCertificates(caCerts);
-			QWebSocketServer *proxyServer = new QWebSocketServer(QString("TRM SecureMode WebsocketServer IP: ") + *it , QWebSocketServer::SecureMode, this);
+			    sslConfiguration.setCaCertificates(caCerts);
+			    QWebSocketServer *proxyServer = new QWebSocketServer(QString("TRM SecureMode WebsocketServer IP: ") + *it , QWebSocketServer::SecureMode, this);
 
-			proxyServer->setSslConfiguration(sslConfiguration);
-			deleteCertAndKeys();
+			    proxyServer->setSslConfiguration(sslConfiguration);
 
-			std::cout << "TRM WebsocketProxy " <<(*it).toUtf8().data() <<std::endl;
-			if (proxyServer->listen(QHostAddress(*it), port)) {
-				__TIMESTAMP()
-				;
-
-				connect(proxyServer, SIGNAL(newConnection()), this,
-						SLOT(onNewConnection()));
-				connect(proxyServer, SIGNAL(onSslErrors()), this,
+			    std::cout << "TRM WebsocketProxy " <<(*it).toUtf8().data() <<std::endl;
+			    if (proxyServer->listen(QHostAddress(*it), port))
+			    {
+				    connect(proxyServer, SIGNAL(newConnection()), this,
+				        SLOT(onNewConnection()));
+				    connect(proxyServer, SIGNAL(onSslErrors()), this,
 						SLOT(onSslErrors()));
-				proxyServers[*it] = proxyServer;
-				if (proxyServer->secureMode() == QWebSocketServer::SecureMode) {
-					__TIMESTAMP()
-					;
-					std::cout << "TRM WebsocketProxy sslMode SecureMode"
+				    proxyServers[*it] = proxyServer;
+				    if (proxyServer->secureMode() == QWebSocketServer::SecureMode)
+				    {
+					    __TIMESTAMP();std::cout << "TRM WebsocketProxy sslMode SecureMode"
 							<< std::endl;
-				} else {
-					__TIMESTAMP()
-					;
-					std::cout << "TRM WebsocketProxy sslMode NonSecureMode"
+				    }
+				    else
+				    {
+					    __TIMESTAMP();std::cout << "TRM WebsocketProxy sslMode NonSecureMode"
 							<< std::endl;
-				}
+			        }
+			    }
+		    }
+		    else
+		    {
+			__TIMESTAMP();std::cout << "TRM WebsocketProxy already listen on "
+			        << (*it).toUtf8().data() << ":" << port << std::endl;
+		    }
 
-			}
-		} else {
-			__TIMESTAMP()
-			;
-			std::cout << "TRM WebsocketProxy already listen on "
-					<< (*it).toUtf8().data() << ":" << port << std::endl;
-		}
-
-		++it;
-	}
+		    ++it;
+	    }
+	    char cmd[256];
+	    sprintf(cmd, "%s %s", "rm", keyFileName.toLatin1().data());
+	    exec_sys_command(cmd);
+    }
 #endif
 	///non secure connection on port 9988
 	port--;
@@ -312,9 +244,6 @@ WebSocketProxy::WebSocketProxy(const QStringList &boundIPs, quint16 port, QObjec
 					QWebSocketServer::NonSecureMode, this);
 			std::cout << "TRM WebsocketProxy " <<(*itr).toUtf8().data() <<std::endl;
 			if (proxyServer->listen(QHostAddress(*itr), port)) {
-				__TIMESTAMP()
-				;
-
 				connect(proxyServer, SIGNAL(newConnection()), this,
 						SLOT(onNewConnection()));
 				connect(proxyServer, SIGNAL(onSslErrors()), this,
