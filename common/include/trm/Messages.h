@@ -665,6 +665,13 @@ enum MessageType {
 	Unknown,
 };
 
+enum CancelReason {
+	TRM_USER = 0,
+	TRM_STOP = 1,
+	TRM_DELAY = 2,
+	TRM_UPDATE_ENDPAD = 3,
+};
+
 class MessageBase
 {
 public:
@@ -1276,13 +1283,30 @@ public:
 	CancelRecording(void)
 	: SimpleTRMRequest(klassName(), "", ""){}
 
-	CancelRecording(const std::string &uuid, const std::string & reservationToken)
-	: SimpleTRMRequest(klassName(), uuid, reservationToken)
+	CancelRecording(const std::string &uuid, const std::string & reservationToken, CancelReason reason = TRM_USER)
+	: cancelReason(reason),SimpleTRMRequest(klassName(), uuid, reservationToken)
 	{
 	}
+	/**
+	 * @brief This function returns a value of the CancelReason
+	 *
+	 * @return Returns the CancelReason value.
+	 */
+		const CancelReason & getCancelReason(void) const {
+			return cancelReason;
+		}
 
+	/**
+	 * @brief This function sets value of the cancel reason for the CancelRecording request.
+	 *
+	 * @param[in] reason Cancel Reason for the CancelRecording request.
+	 */
+		void setCancelReason(const CancelReason &reason) {
+			this->cancelReason = reason;
+		}
 	~CancelRecording(void){}
 private:
+	CancelReason cancelReason;
 };
 
 /**

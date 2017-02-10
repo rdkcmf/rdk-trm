@@ -25,7 +25,7 @@
 * @{
 **/
 
-
+#include <stdlib.h>
 #include <limits>
 #include <map>
 
@@ -40,6 +40,7 @@
 #include "Filter.h"
 #include "Util.h"
 #include "Executors.h"
+#include <typeinfo>
 
 TRM_BEGIN_NAMESPACE
 std::string GetDeviceId();
@@ -83,6 +84,219 @@ public:
         return true;
     }
 };
+
+static bool IsInPadBefore(const std::string &token)
+{
+    bool isInPad = false;
+    const TunerReservation &reservation = Manager::getInstance().getReservation(token);
+    const std::string &padBefore_str = reservation.getActivity().getDetail("autoPadBefore");
+    if (!padBefore_str.empty()) {
+        uint64_t padBefore = atoll(padBefore_str.c_str());
+        uint64_t start = reservation.getStartTime();
+        uint64_t now = (uint64_t) QDateTime::currentMSecsSinceEpoch();
+        if ((now >= start) && (now < (start + padBefore))) {
+            Log()  << "IsInPadBefore[token=" << reservation.getReservationToken() << "]=true, padBefore=" << padBefore << " now =" << now << " (start+padBefore)= "<< (start + padBefore) << std::endl;
+            isInPad = true;
+        }
+        else {
+        }
+    }
+    else {
+    }
+    return isInPad;
+}
+
+static bool IsInPadBefore(const uint64_t start, const uint64_t padBefore)
+{
+    bool isInPad = false;
+    if (padBefore) {
+        uint64_t now = (uint64_t) QDateTime::currentMSecsSinceEpoch();
+        if ((now >= start) && (now < (start + padBefore))) {
+            Log()  << "IsInPadBefore" <<  " padBefore=" << padBefore << " now =" << now << " (start+padBefore)= "<< (start + padBefore) << std::endl;
+            isInPad = true;
+        }
+    }
+    return isInPad;
+}
+
+
+static bool IsInPadAfter(const uint64_t time, const std::string &token)
+{
+    bool isInPad = false;
+    const TunerReservation &reservation = Manager::getInstance().getReservation(token);
+    const std::string &padAfter_str = reservation.getActivity().getDetail("autoPadAfter");
+    if (!padAfter_str.empty()) {
+        uint64_t padAfter = atoll(padAfter_str.c_str());
+        uint64_t end = reservation.getStartTime() + reservation.getDuration();
+        if (end > padAfter) {
+            if ((time >= (end - padAfter)) && (time <= end)) {
+                Log()  << "IsInPadAfter[token=" << reservation.getReservationToken() << "]=true, padAfter=" << padAfter << " time =" << time << " (end-padAfter)= "<< (end - padAfter) << std::endl;
+                isInPad = true;
+            }
+            else {
+            }
+        }
+    }
+    else {
+    }
+    return isInPad;
+}
+
+static void FindPaddingRecording(const ReserveTuner &request, std::string &reservationToken, CancelReason &reason)
+{
+	Tuner::IdList tunerIds;
+	bool isScheRecRequest = false;
+
+    /*
+     * If Live is in H state because of padding
+     */
+    if ((!request.getTunerReservation().getReservationToken().empty()) && (request.getTunerReservation().getActivity() == Activity::kLive)) {
+        Log()  << "FindPaddingRecording: kLive\r\n" << std::endl;
+        if (Manager::getInstance().getTuner(Manager::getInstance().getParent(request.getTunerReservation().getReservationToken())).getState() == TunerState::kHybrid) {
+		    TunerReservation::TokenList R_tokens_on_H_tuners;
+            Filter<ByActivity>(Activity::kRecord,
+                 Manager::getInstance().
+                     getReservationTokens(R_tokens_on_H_tuners,
+                         Filter<ByTunerState>(TunerState::kHybrid, Manager::getInstance().getTunerIds(tunerIds))));
+            Log()  << "FindPaddingRecording: R_tokens_on_H_tuners:\r\n" <<R_tokens_on_H_tuners.size()<< std::endl;
+           if (R_tokens_on_H_tuners.size() == 1) {
+               std::string token = *R_tokens_on_H_tuners.begin();
+               if (IsInPadAfter((uint64_t)QDateTime::currentMSecsSinceEpoch(),token)) {
+                   reservationToken = token;
+                   reason = TRM_STOP;
+                   return;
+               }
+               if (IsInPadBefore(token)) {
+                   reservationToken = token;
+                   reason = TRM_DELAY;
+                   return;
+               }
+           }
+           else {
+            Log()  << "FindPaddingRecording: error: Bad state. H without R\r\n" << std::endl;
+           }
+        }
+        else {
+            Log()  << "FindPaddingRecording: error: unexpected Non-H tuner in conflict with R\r\n" << std::endl;
+        }
+    }
+    else if (request.getTunerReservation().getActivity() == Activity::kRecord)
+    {
+        Log()  << "FindPaddingRecording: kRecord token:\r\n" <<request.getTunerReservation().getReservationToken()<< std::endl;
+        // Verify if current request is for recording with front padding just respond with TRM_DELAY
+        std::string autopadBefore = request.getTunerReservation().getActivity().getDetail("autoPadBefore");
+        std::string hotRec = request.getTunerReservation().getActivity().getDetail("hot");
+        if(!(hotRec == "true"))
+        {
+            Log()  << "Flag isScheRecRequest set to true for hot recording :\n"<< hotRec<< std::endl;
+            isScheRecRequest = true;
+        }
+        uint64_t padBefore = atoll(autopadBefore.c_str());
+        if (IsInPadBefore(request.getTunerReservation().getStartTime(),padBefore)) {
+           reservationToken = request.getTunerReservation().getReservationToken();
+           reason = TRM_DELAY;
+           return;
+        }
+    }
+
+    /*
+     * LIVE is in H state without padding.
+     *
+     * Then continue search for a padded recording to preempt using
+     * this priority/order:
+     *
+     * Find a R of same locator in end padding. Send TRM_PADSTOP;
+     * Find a R of diff locator in end padding. Send TRM_PADSTOP;
+     * Find a R of same locator in front padding. Send TRM_DELAY;
+     * Find a R of diff locator in front padding. Send TRM_DELAY;
+     */
+    {
+        TunerReservation::TokenList R_tokens_on_R_tuners;
+        TunerReservation::TokenList tokens;
+	    TunerReservation::TokenList::const_iterator it;
+
+        Filter<ByActivity>(Activity::kRecord,
+            Manager::getInstance().
+                getReservationTokens(R_tokens_on_R_tuners,
+                    Filter<ByTunerState>(TunerState::kRecord, Manager::getInstance().getTunerIds(tunerIds))));
+
+        tunerIds.clear();
+        tokens = R_tokens_on_R_tuners;
+		try {
+			Filter<ByTunerLocator>(
+					request.getTunerReservation().getServiceLocator(), tokens);
+			for (it = tokens.begin(); it != tokens.end(); it++) {
+				if(isScheRecRequest)
+				{
+					if (IsInPadAfter(request.getTunerReservation().getStartTime(),*it)) {
+						reservationToken = *it;
+						reason = TRM_UPDATE_ENDPAD;
+						return;
+					}
+				}
+				else
+				{
+					if (IsInPadAfter((uint64_t)QDateTime::currentMSecsSinceEpoch(),*it)) {
+						reservationToken = *it;
+						reason = TRM_STOP;
+						return;
+					}
+				}
+
+			}
+		}
+		catch (ItemNotFoundException &e) {
+		}
+
+
+        tunerIds.clear();
+        tokens = R_tokens_on_R_tuners;
+        for (it = tokens.begin(); it != tokens.end(); it++) {
+			if(isScheRecRequest)
+			{
+				if (IsInPadAfter(request.getTunerReservation().getStartTime(),*it)) {
+					reservationToken = *it;
+					reason = TRM_UPDATE_ENDPAD;
+					return;
+				}
+			}
+			else
+			{
+				if (IsInPadAfter((uint64_t)QDateTime::currentMSecsSinceEpoch(),*it)) {
+					reservationToken = *it;
+					reason = TRM_STOP;
+					return;
+				}
+			}
+        }
+
+        tunerIds.clear();
+        tokens = R_tokens_on_R_tuners;
+		try {
+			Filter<ByTunerLocator>(
+					request.getTunerReservation().getServiceLocator(), tokens);
+			for (it = tokens.begin(); it != tokens.end(); it++) {
+				if (IsInPadBefore(*it)) {
+					reservationToken = *it;
+					reason = TRM_DELAY;
+					return;
+				}
+			}
+		}
+		catch (ItemNotFoundException &e) {
+		}
+
+        tunerIds.clear();
+        tokens = R_tokens_on_R_tuners;
+        for (it = tokens.begin(); it != tokens.end(); it++) {
+            if (IsInPadBefore(*it)) {
+		reservationToken = *it;
+		reason = TRM_DELAY;
+		return;
+            }
+        }
+    }
+}
 
 void FindConflictsForRequestedLive(const ReserveTuner &request, ReserveTunerResponse::ConflictCT &conflicts)
 {
@@ -1226,7 +1440,47 @@ void Execute(Executor<ReserveTuner> &exec)
 			
 			try
 			{
+				try{
+					//First check if this device has pending request. If yes and just update it.
+					PendingRequestProcessor &requestProcessor =	Manager::getInstance().getPendingReserveTunerRequestForDevice(request.getDevice());
+					PendingReserveTunerProcessor &reserveTunerPendingRequest = static_cast<PendingReserveTunerProcessor &>(requestProcessor);
+					Log() << "Existing live request from the same device which has pending request -update pending request " << std::endl;
+					reserveTunerPendingRequest.parentRequest = request;
+					response.getConflicts() = reserveTunerPendingRequest.parentResponse.getConflicts();
+					response.setTunerReservation(reserveTunerPendingRequest.parentResponse.getTunerReservation());
+					response.getStatus() = reserveTunerPendingRequest.parentResponse.getStatus();
+					reserveTunerPendingRequest.parentResponse = response;
+					return;
+				}
+				catch (ItemNotFoundException &e) {
+						}
+
 				reserveLive(request, response, exec.getClientId());
+                Log() << "After reserveLive conflict size: " <<response.getConflicts().size()<< std::endl;
+		        if (response.getConflicts().size()) {
+                    std::string reservationToken;
+                    CancelReason reason = TRM_USER;
+                    FindPaddingRecording(request, reservationToken,reason);
+                    Log() << "reservationToken with padding is :" <<reservationToken<<"with CancelReason: "<<reason<< std::endl;
+                    if(reservationToken.length())
+                    {
+						//Found token with padding, Now send a CancelRecording request to recorder
+						const int CANCEL_RECORDING_TIMEOUT_MS = (2000);
+						CancelRecording cancelRequest(GenerateUUID(),	reservationToken,reason);
+	                    Log() << "Sending CancelRecording request" << std::endl;
+
+						std::vector<uint8_t> out;
+						SerializeMessage(cancelRequest,	Connection::kRecorderClientId, out);
+						Manager::getInstance().addPendingRequest(new PendingReserveTunerProcessor(exec.getClientId(),
+										cancelRequest, request, response),CANCEL_RECORDING_TIMEOUT_MS);
+						{
+							::serverInstance->getConnection(Connection::kRecorderClientId).sendAsync(out);
+						}
+	                    return;
+					}
+                    else
+	                    Log() << "No padding conflict found : reservation token is empty" << std::endl;
+                }
 				exec.messageOut = response;
 			}
 			catch(InvalidStateException &e) {
@@ -1253,34 +1507,71 @@ void Execute(Executor<ReserveTuner> &exec)
 			try {
 				reserveRecord(request, response, exec.getClientId());
 				exec.messageOut = response;
+				Log() << "After reserveLive conflict size: " <<response.getConflicts().size()<< std::endl;
 
-				if (exec.messageOut.getConflicts().size() == 1) {
+				if(response.getConflicts().size() == 1)
+				{
+				std::string autopadBefore = request.getTunerReservation().getActivity().getDetail("autoPadBefore");
+				uint64_t padBefore = atoll(autopadBefore.c_str());
 
-					/* Send Conflicts to L's Connection */
-					std::string temporaryToken = GenerateUUID();
-					const int CONFLICT_RESOLUTION_TIMEOUT_MS = (53500);
-
-					//PendingRequest(exec.getClientId(), temporaryToken, request, exec.messageOut.getConflicts())
-					TunerReservation & conflict = *(exec.messageOut.getConflicts().begin());
-                    /* conflict to R is L token,therefore, the conflict's clientId is L token's requester, i.e. XRE */
-					ReservationAttributes &attrs = Manager::getInstance().getReservationAttributes(conflict.getReservationToken());
-					/* If the connection is still alive, send connection to it */
-	#if 0
-					/* Send conflict content in this order (R, L) */
-					NotifyTunerReservationConflicts notification(GenerateUUID(), request.getTunerReservation(), exec.messageOut.getConflicts());
-	#else
-					/* Send conflict content in this order (L, R) */
-					NotifyTunerReservationConflicts notification(GenerateUUID(), conflict, request.getTunerReservation());
-	#endif
-					notification.getConflicts().begin()->setReservationToken(temporaryToken);
-					std::string parentId =  Manager::getInstance().getParent(notification.getTunerReservation().getReservationToken());
-					Manager::getInstance().addPendingRequest(new PendingReserveTunerConflictProcessor(temporaryToken, exec.getClientId(), notification, request, parentId), CONFLICT_RESOLUTION_TIMEOUT_MS);
-
+				if (padBefore != 0)
+				{
+					//response status should be delay;
+					Log() << "Delay recording request due to front padding padBefore:\r\n"<< padBefore<<std::endl;
+					exec.messageOut.getStatus() += "Delay recording request due to front padding \r\n";
+					exec.messageOut.getStatus() = ResponseStatus::kInsufficientResource;
+					std::vector<uint8_t> out;
+					SerializeMessage(exec.messageOut, exec.getClientId(), out);
+					::serverInstance->getConnection(exec.getClientId()).sendAsync(out);
+				}
+				else
+				{
+					std::string reservationToken;
+					CancelReason reason = TRM_USER;
+					FindPaddingRecording(request, reservationToken,reason);
+					Log() << "reservationToken with padding is :" <<reservationToken<<" CancelReason: "<<reason<< std::endl;
+					if(reservationToken.length())
 					{
+						//Found token with padding, Now send a CancelRecording request to recorder
+						const int CANCEL_RECORDING_TIMEOUT_MS = (15000);
+						CancelRecording cancelRequest(GenerateUUID(),reservationToken,reason);
 						std::vector<uint8_t> out;
-						SerializeMessage(notification, attrs.clientId, out);
-						::serverInstance->getConnection(attrs.clientId).sendAsync(out);
+						SerializeMessage(cancelRequest,	Connection::kRecorderClientId, out);
+						Manager::getInstance().addPendingRequest(new PendingReserveTunerProcessor(exec.getClientId(),
+										cancelRequest, request, response),CANCEL_RECORDING_TIMEOUT_MS);
+						{
+							::serverInstance->getConnection(Connection::kRecorderClientId).sendAsync(out);
+						}
+						return;
 					}
+					else
+					{
+						/* Send Conflicts to L's Connection */
+						std::string temporaryToken = GenerateUUID();
+						const int CONFLICT_RESOLUTION_TIMEOUT_MS = (53500);
+
+						//PendingRequest(exec.getClientId(), temporaryToken, request, exec.messageOut.getConflicts())
+						TunerReservation & conflict = *(exec.messageOut.getConflicts().begin());
+						/* conflict to R is L token,therefore, the conflict's clientId is L token's requester, i.e. XRE */
+						ReservationAttributes &attrs = Manager::getInstance().getReservationAttributes(conflict.getReservationToken());
+						/* If the connection is still alive, send connection to it */
+			#if 0
+						/* Send conflict content in this order (R, L) */
+						NotifyTunerReservationConflicts notification(GenerateUUID(), request.getTunerReservation(), exec.messageOut.getConflicts());
+			#else
+						/* Send conflict content in this order (L, R) */
+						NotifyTunerReservationConflicts notification(GenerateUUID(), conflict, request.getTunerReservation());
+			#endif
+						notification.getConflicts().begin()->setReservationToken(temporaryToken);
+						std::string parentId =  Manager::getInstance().getParent(notification.getTunerReservation().getReservationToken());
+						Manager::getInstance().addPendingRequest(new PendingReserveTunerConflictProcessor(temporaryToken, exec.getClientId(), notification, request, parentId), CONFLICT_RESOLUTION_TIMEOUT_MS);
+						{
+							std::vector<uint8_t> out;
+							SerializeMessage(notification, attrs.clientId, out);
+							::serverInstance->getConnection(attrs.clientId).sendAsync(out);
+						}
+					}
+				}
 				}
 				else {
 					Log() << "to Send Record Response, with no conflict resolution\r\n";
@@ -1495,31 +1786,92 @@ void Execute(Executor<CancelRecordingResponse> &exec)
 			Assert(0);
 		}
 		else {
-            const PendingCancelRecordingProcessor &pendingRequest = *static_cast<PendingCancelRecordingProcessor *>(&Manager::getInstance().getPendingRequest(response.getUUID()));
+			Log() << "Response UUID: "<<response.getUUID()<< std::endl;
+			PendingRequestProcessor *pendingRequest = &Manager::getInstance().getPendingRequest(response.getUUID());
+			Log() << "Response pendingRequest->getType(): "<<pendingRequest->getType()<< std::endl;
+			if(pendingRequest->getType() == PendingRequestProcessor::PendingCancelRecording)
+			{
+				const PendingCancelRecordingProcessor &cancleRecordingPendingRequest = *static_cast<PendingCancelRecordingProcessor *>(pendingRequest);
 
 
-            Log() << "[EXEC]CancelRecordingResponse "
-                << "Recording Token " << pendingRequest.request.getReservationToken()
-                << "for client " << pendingRequest.clientId
-                << std::endl;
+				Log() << "[EXEC]CancelRecordingResponse "
+						<< "Recording Token " << cancleRecordingPendingRequest.request.getReservationToken()
+						<< "for client " << cancleRecordingPendingRequest.clientId
+						<< std::endl;
 
-			Assert(pendingRequest.request.getReservationToken() == response.getReservationToken());
+				Assert(cancleRecordingPendingRequest.request.getReservationToken() == response.getReservationToken());
 
-			/* Release the reservation and forward the response to the orginator */
-			Log() << "Release the reservation and Send the response to the orginator" << std::endl;
-            Manager::getInstance().removePendingRequest(response.getUUID());
-			Assert(!Manager::getInstance().isPendingRequest(response.getUUID()));
+				/* Release the reservation and forward the response to the orginator */
+				Log() << "Release the reservation and Send the response to the orginator" << std::endl;
+				Manager::getInstance().removePendingRequest(response.getUUID());
+				Assert(!Manager::getInstance().isPendingRequest(response.getUUID()));
 
-			std::vector<uint8_t> out;
-			SerializeMessage(exec.messageIn, pendingRequest.clientId, out);
-			::serverInstance->getConnection(pendingRequest.clientId).sendAsync(out);
+				std::vector<uint8_t> out;
+				SerializeMessage(exec.messageIn, cancleRecordingPendingRequest.clientId, out);
+				::serverInstance->getConnection(cancleRecordingPendingRequest.clientId).sendAsync(out);
 
-			delete &pendingRequest;
+				/* release the token. */
+				Manager::getInstance().releaseReservation(response.getReservationToken());
+			}
+			else if(pendingRequest->getType() == PendingRequestProcessor::PendingReserveTuner)
+			{
+				const PendingReserveTunerProcessor &reserveTunerPendingRequest = *static_cast<PendingReserveTunerProcessor *>(pendingRequest);
 
+
+				Log() << "[EXEC]PendingReserveTunerProcessor "
+				<< "Recording Token " << reserveTunerPendingRequest.request.getReservationToken()
+				<< "for client " << reserveTunerPendingRequest.clientId
+				<< std::endl;
+
+				Assert(reserveTunerPendingRequest.request.getReservationToken() == response.getReservationToken());
+
+				Manager::getInstance().removePendingRequest(response.getUUID());
+				Assert(!Manager::getInstance().isPendingRequest(response.getUUID()));
+				if(response.getStatus() == ResponseStatus::kOk)
+				{
+					CancelReason cancelReason = reserveTunerPendingRequest.request.getCancelReason();
+					Log() << "cancelReason : " << cancelReason << std::endl;
+					if((cancelReason == TRM_DELAY) || (cancelReason == TRM_STOP))
+					{
+						Log() << "First release the reservation token " << response.getReservationToken()<< std::endl;
+						Manager::getInstance().releaseReservation(response.getReservationToken());
+					}
+					else if(cancelReason == TRM_UPDATE_ENDPAD)
+					{
+						Log() << " Update the reservation to review endPading for token: " << response.getReservationToken()<<std::endl;
+						try
+						{
+							TunerReservation &reservation = Manager::getInstance().getReservation(response.getReservationToken());
+							uint64_t duration = reservation.getDuration();
+							Log() << " original duration: " << duration<<std::endl;
+						    std::string &padAfter_str = const_cast<std::string &> (reservation.getActivity().getDetail("autoPadAfter"));
+						    uint64_t padAfter = atoll(padAfter_str.c_str());
+						    if(padAfter)
+						    {
+							padAfter_str.clear();
+							duration -= padAfter;
+							reservation.setDuration(duration);
+							Manager::getInstance().adjustExpireTimer(response.getReservationToken());
+						    }
+						}
+						catch (ItemNotFoundException &e) {
+						}
+					}
+					Log() << "Now re-process the original request" << std::endl;
+					Executor<ReserveTuner> exec(reserveTunerPendingRequest.parentRequest, reserveTunerPendingRequest.clientId);
+					Execute(exec);
+				}
+				else
+				{
+					Log() << "Response is not ok - Response with conflict message " << std::endl;
+					ReserveTunerResponse parentResponse = reserveTunerPendingRequest.parentResponse;
+					std::vector<uint8_t> out;
+					SerializeMessage(parentResponse, exec.getClientId(), out);
+					::serverInstance->getConnection(exec.getClientId()).sendAsync(out);
+				}
+			}
+			delete pendingRequest;
 		}
-
-		/* Either way, release the token. */
-		Manager::getInstance().releaseReservation(response.getReservationToken());
 
 	}
 	catch(IllegalArgumentException &) {

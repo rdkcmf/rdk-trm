@@ -829,14 +829,88 @@ void JsonDecode(int handle, ValidateTunerReservation & message)
 	JsonDecode(handle, message, 0/*Dummy*/);
 }
 
+void JsonEncode(const CancelRecording &r, json_t *parent)
+{
+	json_t *JT_simpleRequest = parent;
+
+	//Add parent
+	{
+		json_object_set_new(JT_simpleRequest, "requestId", 			json_string(r.getUUID().c_str()));
+		if (!r.getReservationToken().empty())
+		json_object_set_new(JT_simpleRequest, "reservationToken",   json_string(r.getReservationToken().c_str()));
+		json_object_set_new(JT_simpleRequest, "cancelReason",   json_integer(r.getCancelReason()));
+	}
+}
+
+
 void JsonEncode(const CancelRecording & r, std::vector<uint8_t> &out)
 {
-	JsonEncode(r, out, 0/*Dummy*/);
+	json_t * parent = json_object();
+
+	if (parent != 0)
+	{//Add parent
+		json_object_set_new(parent, r.getClassName().c_str(), json_object());
+		json_t *JT_request = json_object_get(parent,  r.getClassName().c_str());
+
+		//Add child
+		{
+			JsonEncode(r, JT_request);
+		}
+
+		//@TODO: only enable JSON_PRESERVE_ORDER for debug builds.
+		json_dump_callback(parent, vector_dump_callback, &out, JSON_INDENT(4) | JSON_PRESERVE_ORDER);
+		json_decref(parent);
+	}
+}
+
+void JsonDecode(json_t *parent, CancelRecording & message)
+{
+	if (parent == 0) {
+	}
+	else
+	//Decode parent
+	{
+		{
+			json_t *JT_simpleRequest = parent;
+
+			json_t *JT_requestId 			= json_object_get(JT_simpleRequest, "requestId");
+			json_t *JT_reservationToken		= json_object_get(JT_simpleRequest, "reservationToken");
+			json_t *JT_cancelReason		= json_object_get(JT_simpleRequest, "cancelReason");
+
+			const char *requestId = json_string_value(JT_requestId);
+			const char *reservationToken = json_string_value(JT_reservationToken);
+			CancelReason cancelReason   = static_cast<CancelReason>(json_integer_value(JT_cancelReason));
+
+			std::cout << "[DEC][" << CancelRecording::klassName() << "]requestId = "		<< requestId 					<< std::endl;
+			if (reservationToken != 0)
+			std::cout << "[DEC][" << CancelRecording::klassName() << "]reservationToken = "	<< reservationToken 			<< std::endl;
+			std::cout << "[DEC][" << CancelRecording::klassName() << "]cancelReason = "		<< cancelReason			<< std::endl;
+
+			message = CancelRecording(requestId, (reservationToken != 0 ? reservationToken : ""),cancelReason);
+		}
+	}
 }
 
 void JsonDecode(int handle, CancelRecording & message)
 {
-	JsonDecode(handle, message, 0/*Dummy*/);
+	json_t * parent = (json_t *)handle;
+	if (parent == 0) {
+
+	}
+	else {
+		const char *key;
+		json_t *value;
+
+		json_object_foreach(parent, key, value) {
+			//First key is "className", first value is json object.
+			Assert(json_object_size(parent) == 1);
+			json_t *JT_simpleRequest = value;
+			{
+				JsonDecode(JT_simpleRequest, message);
+			}
+		}
+		json_decref(parent);
+	}
 }
 
 /*

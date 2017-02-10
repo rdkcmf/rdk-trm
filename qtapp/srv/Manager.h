@@ -60,6 +60,7 @@ public:
         PendingCancelLive,
         PendingReserveTunerConflicts,
         PendingCancelRecording,
+        PendingReserveTuner,
     };
 
     PendingRequestProcessor(const std::string &uuid) : uuid(uuid) {};
@@ -119,6 +120,22 @@ public:
 	CancelRecording  request;
 };
 
+class PendingReserveTunerProcessor: public PendingRequestProcessor
+{
+public:
+	PendingReserveTunerProcessor(uint32_t clientId, CancelRecording&  request, const ReserveTuner & parentRequest, ReserveTunerResponse & parentResponse)
+	:  PendingRequestProcessor(request.getUUID()), clientId(clientId) , request(request),parentRequest(parentRequest),parentResponse(parentResponse){}
+	bool timeout();
+	int getType() {
+		return PendingReserveTuner;
+	}
+
+	uint32_t clientId;
+	ReserveTuner  parentRequest;
+	ReserveTunerResponse  parentResponse;
+	CancelRecording  request;
+};
+
 
 class Manager : public QObject
 {
@@ -159,6 +176,8 @@ public:
 	bool isPendingConflict(const std::string &reservationToken);
 	bool isPendingRequest (const std::string &reservationToken);
 	PendingRequestProcessor & getPendingRequest (const std::string &reservationToken);
+	PendingRequestProcessor & getPendingReserveTunerRequestForDevice (const std::string &device);
+
 	void removePendingRequest(const std::string &reservationToken);
 	NotifyTunerStatesUpdate getTunerStatesUpdate(void);
 	void startReservation(const std::string &reservationToken);

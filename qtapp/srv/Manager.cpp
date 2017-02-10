@@ -323,6 +323,28 @@ PendingRequestProcessor & Manager::getPendingRequest(const std::string &uuid)
 	return **it;
 }
 
+PendingRequestProcessor & Manager::getPendingReserveTunerRequestForDevice(const std::string &device)
+{
+	std::list<PendingRequestProcessor *>::iterator it = pendingRequests.begin();
+	while(it != pendingRequests.end()) {
+		if ((**it).getType() == PendingRequestProcessor::PendingReserveTuner) {
+			const PendingReserveTunerProcessor &reserveTunerPendingRequest = *static_cast<PendingReserveTunerProcessor *>(*it);
+			if(reserveTunerPendingRequest.parentRequest.getDevice().compare(device) == 0)
+			{
+				ReserveTunerResponse parentResponse = reserveTunerPendingRequest.parentResponse;
+				break;
+			}
+		}
+		it++;
+	}
+	if (it == pendingRequests.end()) {
+		Log() << "Throw ItemNotFoundException from Manager::getPendingReserveTunerRequestForDevice() for " << device << std::endl;
+		throw ItemNotFoundException();
+	}
+
+	return **it;
+}
+
 void Manager::removePendingRequest(const std::string &uuid)
 {
 	Log() << "Manager::removePendingRequest  " << uuid << std::endl;
@@ -784,6 +806,28 @@ bool PendingCancelRecordingProcessor::timeout()
 	std::vector<uint8_t> out;
 	SerializeMessage(response, clientId, out);
 	::serverInstance->getConnection(clientId).sendAsync(out);
+
+	return true;
+}
+
+bool PendingReserveTunerProcessor::timeout()
+{
+	Log() << "PendingReserveTunerProcessor " << request.getUUID() << std::endl;
+
+	Assert(this == &Manager::getInstance().getPendingRequest(getUUID()));
+
+	PendingRequestProcessor *pendingRequest = &Manager::getInstance().getPendingRequest(request.getUUID());
+	Log() << "Response pendingRequest->getType(): "<<pendingRequest->getType()<< std::endl;
+
+	const PendingReserveTunerProcessor &reserveTunerPendingRequest = *static_cast<PendingReserveTunerProcessor *>(pendingRequest);
+	Manager::getInstance().removePendingRequest(request.getUUID());
+	Assert(!Manager::getInstance().isPendingRequest(request.getUUID()));
+
+	Log() << "Response not ok so Send response as it is with conflict " << std::endl;
+	ReserveTunerResponse parentResponse = reserveTunerPendingRequest.parentResponse;
+	std::vector<uint8_t> out;
+	SerializeMessage(parentResponse, reserveTunerPendingRequest.clientId, out);
+	::serverInstance->getConnection(reserveTunerPendingRequest.clientId).sendAsync(out);
 
 	return true;
 }
