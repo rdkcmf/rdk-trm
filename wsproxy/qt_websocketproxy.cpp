@@ -150,87 +150,114 @@ static int exec_sys_command(char* cmd)
   return 0;
 }
 
+#define  TRM_USE_RFC 1
+static bool rfc_get_trmssl_status()
+{
+    bool isTRMSSLEnabled = false;
+#ifdef TRM_USE_RFC
+    int sysRet = system(". /lib/rdk/isFeatureEnabled.sh TRMSSL");
+    if((WEXITSTATUS(sysRet) == true) && (WIFEXITED(sysRet) == true))
+    {
+        std::cout << "RFC TRMSSL feature Enabled "<<std::endl;
+        isTRMSSLEnabled = true;
+    }
+#else
+	isTRMSSLEnabled = true;
+#endif
+    //Note: For master branch enable by default. Remove next line when merge to  stable branch.
+    isTRMSSLEnabled = true;
+
+    std::cout << "RFC TRMSSL feature status:"<< isTRMSSLEnabled<<std::endl;
+    return isTRMSSLEnabled;
+}
 
 WebSocketProxy::WebSocketProxy(const QStringList &boundIPs, quint16 port, QObject *parent) :
     QObject(parent), proxyServers(), connections()
 {
 #ifdef TRM_USE_SSL
-    //Reading TRM configuration file
-    QSettings trmSetting( trmPropertiesPath, QSettings::IniFormat );
-    QString caChainFile = trmSetting.value( caKeyTagName ).toString();
-    QString keyFileName = trmSetting.value( privateKeyTagName  ).toString();
-    QString certFileName = trmSetting.value( publicKeyTagName  ).toString();
-    if(caChainFile.isNull() || keyFileName.isNull() || certFileName.isNull()  )
-    {
-		std::cout << "Missing TRM configuration information";
-    }
-    else
-    {
-        QStringList::const_iterator it = boundIPs.constBegin();
-	    while (it != boundIPs.constEnd())
-	    {
-		    if (proxyServers.constFind(*it) == proxyServers.constEnd())
-		    {
-			    QFile certFile(certFileName);
-			    QFile keyFile(keyFileName);
-			    if(!keyFile.exists())
-			    {
-			        std::cout << "Server private key not exist. Don't start the server ";
-			        break;
-			    }
-			    certFile.open(QIODevice::ReadOnly);
-			    keyFile.open(QIODevice::ReadOnly);
-			    QSslCertificate certificate(&certFile, QSsl::Pem);
-			    QSslKey sslKey(&keyFile, QSsl::Rsa, QSsl::Pem,QSsl::PrivateKey,QByteArray(""));
-			    certFile.close();
-			    keyFile.close();
-			    QSslConfiguration sslConfiguration;
-
-			    sslConfiguration.setPeerVerifyMode(QSslSocket::VerifyPeer);
-			    sslConfiguration.setLocalCertificate(certificate);
-			    sslConfiguration.setPrivateKey(sslKey);
-			    sslConfiguration.setProtocol(QSsl::TlsV1SslV3);
-			    sslConfiguration.setPeerVerifyDepth(2);
-
-			    QList<QSslCertificate> caCerts = QSslCertificate::fromPath(caChainFile);
-
-			    sslConfiguration.setCaCertificates(caCerts);
-			    QWebSocketServer *proxyServer = new QWebSocketServer(QString("TRM SecureMode WebsocketServer IP: ") + *it , QWebSocketServer::SecureMode, this);
-
-			    proxyServer->setSslConfiguration(sslConfiguration);
-
-			    std::cout << "TRM WebsocketProxy " <<(*it).toUtf8().data() <<std::endl;
-			    if (proxyServer->listen(QHostAddress(*it), port))
-			    {
-				    connect(proxyServer, SIGNAL(newConnection()), this,
-				        SLOT(onNewConnection()));
-				    connect(proxyServer, SIGNAL(onSslErrors()), this,
-						SLOT(onSslErrors()));
-				    proxyServers[*it] = proxyServer;
-				    if (proxyServer->secureMode() == QWebSocketServer::SecureMode)
-				    {
-					    __TIMESTAMP();std::cout << "TRM WebsocketProxy sslMode SecureMode"
-							<< std::endl;
-				    }
-				    else
-				    {
-					    __TIMESTAMP();std::cout << "TRM WebsocketProxy sslMode NonSecureMode"
-							<< std::endl;
+	if(rfc_get_trmssl_status)
+	{
+        //Reading TRM configuration file
+        QSettings trmSetting( trmPropertiesPath, QSettings::IniFormat );
+        QString caChainFile = trmSetting.value( caKeyTagName ).toString();
+        QString keyFileName = trmSetting.value( privateKeyTagName  ).toString();
+        QString certFileName = trmSetting.value( publicKeyTagName  ).toString();
+        if(caChainFile.isNull() || keyFileName.isNull() || certFileName.isNull()  )
+        {
+		    std::cout << "Missing TRM configuration information";
+        }
+        else
+        {
+            QStringList::const_iterator it = boundIPs.constBegin();
+	        while (it != boundIPs.constEnd())
+	        {
+		        if (proxyServers.constFind(*it) == proxyServers.constEnd())
+		        {
+			        QFile certFile(certFileName);
+			        QFile keyFile(keyFileName);
+			        if(!keyFile.exists())
+			        {
+			            std::cout << "Server private key not exist. Don't start the server ";
+			            break;
 			        }
-			    }
-		    }
-		    else
-		    {
-			__TIMESTAMP();std::cout << "TRM WebsocketProxy already listen on "
-			        << (*it).toUtf8().data() << ":" << port << std::endl;
-		    }
+			        certFile.open(QIODevice::ReadOnly);
+			        keyFile.open(QIODevice::ReadOnly);
+			        QSslCertificate certificate(&certFile, QSsl::Pem);
+			        QSslKey sslKey(&keyFile, QSsl::Rsa, QSsl::Pem,QSsl::PrivateKey,QByteArray(""));
+			        certFile.close();
+			        keyFile.close();
+			        QSslConfiguration sslConfiguration;
 
-		    ++it;
-	    }
-	    char cmd[256];
-	    sprintf(cmd, "%s %s", "rm", keyFileName.toLatin1().data());
-	    exec_sys_command(cmd);
-    }
+			        sslConfiguration.setPeerVerifyMode(QSslSocket::VerifyPeer);
+			        sslConfiguration.setLocalCertificate(certificate);
+			        sslConfiguration.setPrivateKey(sslKey);
+			        sslConfiguration.setProtocol(QSsl::TlsV1SslV3);
+			        sslConfiguration.setPeerVerifyDepth(2);
+
+			        QList<QSslCertificate> caCerts = QSslCertificate::fromPath(caChainFile);
+
+			        sslConfiguration.setCaCertificates(caCerts);
+			        QWebSocketServer *proxyServer = new QWebSocketServer(QString("TRM SecureMode WebsocketServer IP: ") + *it , QWebSocketServer::SecureMode, this);
+
+			        proxyServer->setSslConfiguration(sslConfiguration);
+
+			        std::cout << "TRM WebsocketProxy starting server on ip: " <<(*it).toUtf8().data()<< std::endl;
+			        if (proxyServer->listen(QHostAddress(*it), port))
+			        {
+				        connect(proxyServer, SIGNAL(newConnection()), this,
+			            SLOT(onNewConnection()));
+				        connect(proxyServer, SIGNAL(onSslErrors()), this,
+						SLOT(onSslErrors()));
+				        proxyServers[*it] = proxyServer;
+				        if (proxyServer->secureMode() == QWebSocketServer::SecureMode)
+				        {
+				            __TIMESTAMP();std::cout << "TRM WebsocketProxy sslMode SecureMode"
+                                    << std::endl;
+				        }
+				        else
+				        {
+				            __TIMESTAMP();std::cout << "TRM WebsocketProxy sslMode NonSecureMode"
+                                    << std::endl;
+				        }
+			        }
+			        else
+				    {
+					    std::cout << "TRM WebsocketProxy Failed to listen" << std::endl;
+			        }
+		        }
+		        else
+		        {
+			    __TIMESTAMP();std::cout << "TRM WebsocketProxy already listen on "
+			        << (*it).toUtf8().data() << ":" << port << std::endl;
+		        }
+
+		        ++it;
+	        }
+	        char cmd[256];
+	        sprintf(cmd, "%s %s", "rm", keyFileName.toLatin1().data());
+	        exec_sys_command(cmd);
+        }
+	}
 #endif
 	///non secure connection on port 9988
 	port--;
