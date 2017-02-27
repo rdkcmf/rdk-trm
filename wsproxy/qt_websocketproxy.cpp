@@ -221,7 +221,8 @@ WebSocketProxy::WebSocketProxy(const QStringList &boundIPs, quint16 port, QObjec
 
 			        proxyServer->setSslConfiguration(sslConfiguration);
 
-			        std::cout << "TRM WebsocketProxy starting server on ip: " <<(*it).toUtf8().data()<< std::endl;
+			    	std::cout << "TRM WebsocketProxy starting server on ip: " <<(*it).toUtf8().data()
+						<<" SecureMode: "<<proxyServer->secureMode()<< std::endl;
 			        if (proxyServer->listen(QHostAddress(*it), port))
 			        {
 				        connect(proxyServer, SIGNAL(newConnection()), this,
@@ -229,16 +230,6 @@ WebSocketProxy::WebSocketProxy(const QStringList &boundIPs, quint16 port, QObjec
 				        connect(proxyServer, SIGNAL(onSslErrors()), this,
 						SLOT(onSslErrors()));
 				        proxyServers[*it] = proxyServer;
-				        if (proxyServer->secureMode() == QWebSocketServer::SecureMode)
-				        {
-				            __TIMESTAMP();std::cout << "TRM WebsocketProxy sslMode SecureMode"
-                                    << std::endl;
-				        }
-				        else
-				        {
-				            __TIMESTAMP();std::cout << "TRM WebsocketProxy sslMode NonSecureMode"
-                                    << std::endl;
-				        }
 			        }
 			        else
 				    {
@@ -269,25 +260,18 @@ WebSocketProxy::WebSocketProxy(const QStringList &boundIPs, quint16 port, QObjec
 			QWebSocketServer *proxyServer = new QWebSocketServer(
 					QString("TRM NonSecureMode WebsocketServer IP: ") + *itr,
 					QWebSocketServer::NonSecureMode, this);
-			std::cout << "TRM WebsocketProxy " <<(*itr).toUtf8().data() <<std::endl;
+			std::cout << "TRM WebsocketProxy starting server on ip: " <<(*itr).toUtf8().data()
+					<<" SecureMode: "<<proxyServer->secureMode()<< std::endl;
 			if (proxyServer->listen(QHostAddress(*itr), port)) {
 				connect(proxyServer, SIGNAL(newConnection()), this,
 						SLOT(onNewConnection()));
 				connect(proxyServer, SIGNAL(onSslErrors()), this,
 						SLOT(onSslErrors()));
 				proxyServers[*itr] = proxyServer;
-				if (proxyServer->secureMode() == QWebSocketServer::SecureMode) {
-					__TIMESTAMP()
-					;
-					std::cout << "TRM WebsocketProxy sslMode SecureMode"
-							<< std::endl;
-				} else {
-					__TIMESTAMP()
-					;
-					std::cout << "TRM WebsocketProxy sslMode NonSecureMode"
-							<< std::endl;
-				}
-
+			}
+			else
+			{
+				std::cout << "TRM WebsocketProxy Failed to listen" << std::endl;
 			}
 
 		++itr;
@@ -333,11 +317,11 @@ void WebSocketProxy::onNewConnection()
     }
 
     QWebSocketServer *proxyServer = qobject_cast<QWebSocketServer *>(sender());
-    __TIMESTAMP(); std::cout << "TRM WebsocketProxy connection from server " << (void *)proxyServer << "of name:" << proxyServer->serverName().toUtf8().data() << std::endl;
+    __TIMESTAMP(); std::cout << "TRM WebsocketProxy connection from server " << (void *)proxyServer << " of name:" << proxyServer->serverName().toUtf8().data() << std::endl;
 
     QWebSocket *wssocket = proxyServer->nextPendingConnection();
     websocket_connect_callback((void *)wssocket);
-
+    __TIMESTAMP(); std::cout << "TRM WebsocketProxy peerAddress: "  << qPrintable(wssocket->peerAddress().toString()) << " Port: "<< wssocket->peerPort();
     __TIMESTAMP(); std::cout << "TRM WebsocketProxy accept connection " << (void *)wssocket << std::endl;
 
     // The QtWebSocket version we use doesn't support connected() signal. Instead the
