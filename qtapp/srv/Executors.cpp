@@ -1461,13 +1461,13 @@ void Execute(Executor<ReserveTuner> &exec)
                     std::string reservationToken;
                     CancelReason reason = TRM_USER;
                     FindPaddingRecording(request, reservationToken,reason);
-                    Log() << "reservationToken with padding is :" <<reservationToken<<"with CancelReason: "<<reason<< std::endl;
+                    Log() << "reservationToken with padding is :" <<reservationToken<< std::endl;
                     if(reservationToken.length())
                     {
 						//Found token with padding, Now send a CancelRecording request to recorder
 						const int CANCEL_RECORDING_TIMEOUT_MS = (2000);
 						CancelRecording cancelRequest(GenerateUUID(),	reservationToken,reason);
-	                    Log() << "Sending CancelRecording request" << std::endl;
+	                    Log() << "Sending CancelRecording request with CancelReason: "<<reason << std::endl;
 
 						std::vector<uint8_t> out;
 						SerializeMessage(cancelRequest,	Connection::kRecorderClientId, out);
@@ -1507,7 +1507,7 @@ void Execute(Executor<ReserveTuner> &exec)
 			try {
 				reserveRecord(request, response, exec.getClientId());
 				exec.messageOut = response;
-				Log() << "After reserveLive conflict size: " <<response.getConflicts().size()<< std::endl;
+				Log() << "After reserveRecord conflict size: " <<response.getConflicts().size()<< std::endl;
 
 				if(response.getConflicts().size() == 1)
 				{
@@ -1534,6 +1534,7 @@ void Execute(Executor<ReserveTuner> &exec)
 					{
 						//Found token with padding, Now send a CancelRecording request to recorder
 						const int CANCEL_RECORDING_TIMEOUT_MS = (15000);
+						Log() << "Sending CancelRecording request with CancelReason: "<<reason << std::endl;
 						CancelRecording cancelRequest(GenerateUUID(),reservationToken,reason);
 						std::vector<uint8_t> out;
 						SerializeMessage(cancelRequest,	Connection::kRecorderClientId, out);
