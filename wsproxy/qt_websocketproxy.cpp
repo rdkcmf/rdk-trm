@@ -153,19 +153,17 @@ static int exec_sys_command(char* cmd)
 #define  TRM_USE_RFC 1
 static bool rfc_get_trmssl_status()
 {
-    bool isTRMSSLEnabled = false;
+    bool isTRMSSLEnabled = true;
 #ifdef TRM_USE_RFC
-    int sysRet = system(". /lib/rdk/isFeatureEnabled.sh TRMSSL");
+    int sysRet = system(". /lib/rdk/isFeatureEnabled.sh NOTRMSSL");
     if((WEXITSTATUS(sysRet) == true) && (WIFEXITED(sysRet) == true))
     {
-        std::cout << "RFC TRMSSL feature Enabled "<<std::endl;
-        isTRMSSLEnabled = true;
+        std::cout << "RFC NOTRMSSL feature Enabled "<<std::endl;
+        isTRMSSLEnabled = false;
     }
 #else
 	isTRMSSLEnabled = true;
 #endif
-    //Note: For master branch enable by default. Remove next line when merge to  stable branch.
-    isTRMSSLEnabled = true;
 
     std::cout << "RFC TRMSSL feature status:"<< isTRMSSLEnabled<<std::endl;
     return isTRMSSLEnabled;
@@ -175,7 +173,7 @@ WebSocketProxy::WebSocketProxy(const QStringList &boundIPs, quint16 port, QObjec
     QObject(parent), proxyServers(), connections()
 {
 #ifdef TRM_USE_SSL
-	if(rfc_get_trmssl_status)
+	if(rfc_get_trmssl_status() == true)
 	{
         //Reading TRM configuration file
         QSettings trmSetting( trmPropertiesPath, QSettings::IniFormat );
