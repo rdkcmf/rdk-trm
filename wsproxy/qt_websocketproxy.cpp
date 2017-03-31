@@ -209,7 +209,7 @@ WebSocketProxy::WebSocketProxy(const QStringList &boundIPs, quint16 port, QObjec
 			        sslConfiguration.setPeerVerifyMode(QSslSocket::VerifyPeer);
 			        sslConfiguration.setLocalCertificate(certificate);
 			        sslConfiguration.setPrivateKey(sslKey);
-			        sslConfiguration.setProtocol(QSsl::TlsV1SslV3);
+			        sslConfiguration.setProtocol(QSsl::TlsV1_2);
 			        sslConfiguration.setPeerVerifyDepth(2);
 
 			        QList<QSslCertificate> caCerts = QSslCertificate::fromPath(caChainFile);
@@ -224,9 +224,13 @@ WebSocketProxy::WebSocketProxy(const QStringList &boundIPs, quint16 port, QObjec
 			        if (proxyServer->listen(QHostAddress(*it), port))
 			        {
 				        connect(proxyServer, SIGNAL(newConnection()), this,
-			            SLOT(onNewConnection()));
-				        connect(proxyServer, SIGNAL(onSslErrors()), this,
-						SLOT(onSslErrors()));
+			                             SLOT(onNewConnection()));
+	         			connect(proxyServer,&QWebSocketServer::sslErrors ,this,
+						&WebSocketProxy::onSslErrors);
+				        connect(proxyServer, &QWebSocketServer::acceptError, this,
+						&WebSocketProxy::onAcceptError);
+                                        connect(proxyServer, &QWebSocketServer::peerVerifyError, this,
+                                                &WebSocketProxy::onPeerVerifyError);
 				        proxyServers[*it] = proxyServer;
 			        }
 			        else
@@ -263,8 +267,6 @@ WebSocketProxy::WebSocketProxy(const QStringList &boundIPs, quint16 port, QObjec
 			if (proxyServer->listen(QHostAddress(*itr), port)) {
 				connect(proxyServer, SIGNAL(newConnection()), this,
 						SLOT(onNewConnection()));
-				connect(proxyServer, SIGNAL(onSslErrors()), this,
-						SLOT(onSslErrors()));
 				proxyServers[*itr] = proxyServer;
 			}
 			else
@@ -281,7 +283,16 @@ WebSocketProxy::WebSocketProxy(const QStringList &boundIPs, quint16 port, QObjec
 #ifdef TRM_USE_SSL
 void WebSocketProxy::onSslErrors(const QList<QSslError> &sslError)
 {
-    std::cout<<" onSslErrors occured";
+    qDebug() << "onSslErrors :" << sslError;
+}
+
+void WebSocketProxy::onAcceptError(QAbstractSocket::SocketError socketError)
+{
+    std::cout<<" onAcceptError occured:"<<socketError<<std::endl;
+}
+void WebSocketProxy::onPeerVerifyError(const QSslError &error)
+{
+    qDebug() << "onPeerVerifyError :" << error;
 }
 #endif
 

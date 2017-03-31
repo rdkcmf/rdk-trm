@@ -63,6 +63,8 @@ private Q_SLOTS:
 
 #ifdef TRM_USE_SSL
     void onSslErrors(const QList<QSslError> &errors);
+    void onAcceptError(QAbstractSocket::SocketError socketError);
+    void onPeerVerifyError(const QSslError &error);
 #endif
     void onNewConnection(void);
     void onWebsocketConnect(void);
