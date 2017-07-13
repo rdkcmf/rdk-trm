@@ -85,7 +85,7 @@ public:
     }
 };
 
-static bool IsInPadBefore(const std::string &token)
+static bool IsInPadBefore(const uint64_t reqStartTime, const std::string &token)
 {
     bool isInPad = false;
     const TunerReservation &reservation = Manager::getInstance().getReservation(token);
@@ -93,9 +93,9 @@ static bool IsInPadBefore(const std::string &token)
     if (!padBefore_str.empty()) {
         uint64_t padBefore = atoll(padBefore_str.c_str());
         uint64_t start = reservation.getStartTime();
-        uint64_t now = (uint64_t) QDateTime::currentMSecsSinceEpoch();
-        if ((now >= start) && (now < (start + padBefore))) {
-            Log()  << "IsInPadBefore[token=" << reservation.getReservationToken() << "]=true, padBefore=" << padBefore << " now =" << now << " (start+padBefore)= "<< (start + padBefore) << std::endl;
+        Log()  << " IsInPadBefore[token=" << reservation.getReservationToken() << "]=true, padBefore=" << padBefore << " reqStartTime =" << reqStartTime << " (start+padBefore)= "<< (start + padBefore) << std::endl;
+        if ((reqStartTime >= start) && (reqStartTime < (start + padBefore))) {
+            Log()  << "IsInPadBefore[token=" << reservation.getReservationToken() << "]=true, padBefore=" << padBefore << " reqStartTime =" << reqStartTime << " (start+padBefore)= "<< (start + padBefore) << std::endl;
             isInPad = true;
         }
         else {
@@ -111,6 +111,7 @@ static bool IsInPadBefore(const uint64_t start, const uint64_t padBefore)
     bool isInPad = false;
     if (padBefore) {
         uint64_t now = (uint64_t) QDateTime::currentMSecsSinceEpoch();
+        Log()  << "IsInPadBefore" <<  " padBefore=" << padBefore << " now =" << now << " (start+padBefore)= "<< (start + padBefore) << std::endl;
         if ((now >= start) && (now < (start + padBefore))) {
             Log()  << "IsInPadBefore" <<  " padBefore=" << padBefore << " now =" << now << " (start+padBefore)= "<< (start + padBefore) << std::endl;
             isInPad = true;
@@ -146,7 +147,8 @@ static void FindPaddingRecording(const ReserveTuner &request, std::string &reser
 {
 	Tuner::IdList tunerIds;
 	bool isScheRecRequest = false;
-
+	//For schedule recording it will be the actual recording start time otherwise for live and Hot recording it will be current time.
+	uint64_t requestStartTime = (uint64_t)QDateTime::currentMSecsSinceEpoch();
     /*
      * If Live is in H state because of padding
      */
@@ -166,7 +168,7 @@ static void FindPaddingRecording(const ReserveTuner &request, std::string &reser
                    reason = TRM_STOP;
                    return;
                }
-               if (IsInPadBefore(token)) {
+               if (IsInPadBefore(isScheRecRequest,token)) {
                    reservationToken = token;
                    reason = TRM_DELAY;
                    return;
@@ -188,8 +190,9 @@ static void FindPaddingRecording(const ReserveTuner &request, std::string &reser
         std::string hotRec = request.getTunerReservation().getActivity().getDetail("hot");
         if(!(hotRec == "true"))
         {
-            Log()  << "Flag isScheRecRequest set to true for hot recording :\n"<< hotRec<< std::endl;
             isScheRecRequest = true;
+            requestStartTime = request.getTunerReservation().getStartTime();
+            Log()  << "Flag isScheRecRequest set to true for recording request:"<< hotRec <<" requestStartTime:" <<requestStartTime<<std::endl;
         }
         uint64_t padBefore = atoll(autopadBefore.c_str());
         if (IsInPadBefore(request.getTunerReservation().getStartTime(),padBefore)) {
@@ -228,7 +231,7 @@ static void FindPaddingRecording(const ReserveTuner &request, std::string &reser
 			for (it = tokens.begin(); it != tokens.end(); it++) {
 				if(isScheRecRequest)
 				{
-					if (IsInPadAfter(request.getTunerReservation().getStartTime(),*it)) {
+					if (IsInPadAfter(requestStartTime,*it)) {
 						reservationToken = *it;
 						reason = TRM_UPDATE_ENDPAD;
 						return;
@@ -236,7 +239,7 @@ static void FindPaddingRecording(const ReserveTuner &request, std::string &reser
 				}
 				else
 				{
-					if (IsInPadAfter((uint64_t)QDateTime::currentMSecsSinceEpoch(),*it)) {
+					if (IsInPadAfter(requestStartTime,*it)) {
 						reservationToken = *it;
 						reason = TRM_STOP;
 						return;
@@ -254,7 +257,7 @@ static void FindPaddingRecording(const ReserveTuner &request, std::string &reser
         for (it = tokens.begin(); it != tokens.end(); it++) {
 			if(isScheRecRequest)
 			{
-				if (IsInPadAfter(request.getTunerReservation().getStartTime(),*it)) {
+				if (IsInPadAfter(requestStartTime,*it)) {
 					reservationToken = *it;
 					reason = TRM_UPDATE_ENDPAD;
 					return;
@@ -262,7 +265,7 @@ static void FindPaddingRecording(const ReserveTuner &request, std::string &reser
 			}
 			else
 			{
-				if (IsInPadAfter((uint64_t)QDateTime::currentMSecsSinceEpoch(),*it)) {
+				if (IsInPadAfter(requestStartTime,*it)) {
 					reservationToken = *it;
 					reason = TRM_STOP;
 					return;
@@ -276,7 +279,7 @@ static void FindPaddingRecording(const ReserveTuner &request, std::string &reser
 			Filter<ByTunerLocator>(
 					request.getTunerReservation().getServiceLocator(), tokens);
 			for (it = tokens.begin(); it != tokens.end(); it++) {
-				if (IsInPadBefore(*it)) {
+				if (IsInPadBefore(requestStartTime,*it)) {
 					reservationToken = *it;
 					reason = TRM_DELAY;
 					return;
@@ -289,7 +292,7 @@ static void FindPaddingRecording(const ReserveTuner &request, std::string &reser
         tunerIds.clear();
         tokens = R_tokens_on_R_tuners;
         for (it = tokens.begin(); it != tokens.end(); it++) {
-            if (IsInPadBefore(*it)) {
+			if (IsInPadBefore(requestStartTime,*it)) {
 		reservationToken = *it;
 		reason = TRM_DELAY;
 		return;
