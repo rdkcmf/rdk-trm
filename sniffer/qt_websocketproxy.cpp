@@ -162,7 +162,7 @@ void WebSocketProxy::onNewConnection()
         		__TIMESTAMP(); std::cout << "Rebooting STB on the initial xi3 connection \r\n" << std::endl;
         		close(fd);
         		::sync();
-        		::reboot(LINUX_REBOOT_CMD_RESTART);
+        		::system( "sh /rebootNow.sh -s websocketproxyinit" );
         		return;
         	}
         }
