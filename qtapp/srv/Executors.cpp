@@ -129,7 +129,7 @@ static bool IsInPadAfter(const uint64_t time, const std::string &token)
     if (!padAfter_str.empty()) {
         uint64_t padAfter = atoll(padAfter_str.c_str());
         uint64_t end = reservation.getStartTime() + reservation.getDuration();
-        if (end > padAfter) {
+        if (padAfter) {
             if ((time >= (end - padAfter)) && (time <= end)) {
                 Log()  << "IsInPadAfter[token=" << reservation.getReservationToken() << "]=true, padAfter=" << padAfter << " time =" << time << " (end-padAfter)= "<< (end - padAfter) << std::endl;
                 isInPad = true;
