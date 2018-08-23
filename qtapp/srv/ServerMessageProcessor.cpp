@@ -93,6 +93,11 @@ void ServerMessageProcessor::operator() (const CancelLiveResponse &msg)
 	process(msg);
 }
 
+void ServerMessageProcessor::operator() (const UpdateTunerActivityStatus &msg)
+{
+        process(msg);
+}
+
 TRM_END_NAMESPACE
 
 

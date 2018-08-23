@@ -2134,6 +2134,19 @@ void Execute(Executor<GetVersion> &exec)
 	SerializeMessage(exec.messageOut, exec.getClientId(), out);
 	::serverInstance->getConnection(exec.getClientId()).sendAsync(out);
 }
+
+void Execute(Executor<UpdateTunerActivityStatus> &exec)
+{
+    try {
+        std::vector<uint8_t> out;
+        SerializeMessage(exec.messageIn, Connection::kTunerAgentId, out);
+        ::serverInstance->getConnection(Connection::kTunerAgentId).sendAsync(out);
+    }
+    catch(...) {
+    }
+
+}
+
 #if 1
 void Execute(Executor<CancelLive> &exec)
 {

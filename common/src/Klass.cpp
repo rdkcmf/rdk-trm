@@ -83,6 +83,8 @@ enum  {
 	notifyClientConnectionEvent,
 
 	getTRMConnectionEvents,
+	updateTunerActivityStatus,
+	updateTunerActivityStatusResponse,
 
 	MAX_ENUM_NUMBER
 };
@@ -141,6 +143,8 @@ const Enum<Klass> Klass::kNotifyTunerPretune 					(MAKE_PAIR(notifyTunerPretune)
 const Enum<Klass> Klass::kNotifyClientConnectionEvent			(MAKE_PAIR(notifyClientConnectionEvent));
 
 const Enum<Klass> Klass::kGetTRMConnectionEvents      			(MAKE_PAIR(getTRMConnectionEvents));
+const Enum<Klass> Klass::kUpdateTunerActivityStatus                        (MAKE_PAIR(updateTunerActivityStatus));
+const Enum<Klass> Klass::kUpdateTunerActivityStatusResponse                        (MAKE_PAIR(updateTunerActivityStatusResponse));
 
 
 const std::vector<const Enum<Klass> * > & Klass::getEnums(void)
@@ -200,6 +204,9 @@ const std::vector<const Enum<Klass> * > & Klass::getEnums(void)
 		enums_.push_back(&Klass::kNotifyClientConnectionEvent);
 
 		enums_.push_back(&Klass::kGetTRMConnectionEvents);
+
+		enums_.push_back(&Klass::kUpdateTunerActivityStatus);
+		enums_.push_back(&Klass::kUpdateTunerActivityStatusResponse);
 
 		Assert(enums_.size() == MAX_ENUM_NUMBER);
 	};

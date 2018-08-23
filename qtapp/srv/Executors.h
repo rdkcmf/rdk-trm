@@ -80,6 +80,7 @@ void Execute(Executor<ReserveTuner> &, const std::string &);
 void Execute(Executor<GetVersion> &exec);
 void Execute(Executor<CancelLive> &exec);
 void Execute(Executor<CancelLiveResponse> &exec);
+void Execute(Executor<UpdateTunerActivityStatus> &exec);
 
 TRM_END_NAMESPACE
 

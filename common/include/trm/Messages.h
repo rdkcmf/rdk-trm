@@ -2313,6 +2313,63 @@ public:
 	std::string partnerId;
 };
 
+class UpdateTunerActivityStatusResponse : public SimpleTRMResponse {
+public:
+        static const char *klassName(void) { return Klass::kUpdateTunerActivityStatusResponse; }
+        UpdateTunerActivityStatusResponse(const std::string &uuid = "")
+        : SimpleTRMResponse(klassName(), uuid, ResponseStatus(ResponseStatus::kOk), "") {}
+
+       void print(void) const {
+           std::cout<<"UpdateTunerActivityStatusResponse "<< std::endl;
+       }
+
+};
+
+class UpdateTunerActivityStatus {
+public:
+       typedef UpdateTunerActivityStatusResponse ResponseType;
+       static const char *klassName(void) { return Klass::kUpdateTunerActivityStatus; }
+       UpdateTunerActivityStatus(void){}
+       UpdateTunerActivityStatus(const std::string &UUID, const std::string &device,const std::string & tunerId,const std::string & activityStatus):uuid(UUID),deviceID(device),tunerId(tunerId),activityStatus(activityStatus){}
+
+       const std::string &getTunerId(void) const {
+           return tunerId;
+       }
+       const std::string &getUUID(void) const {
+           return uuid;
+       }
+       const std::string &getTunerActivityStatus(void) const {
+           return activityStatus;
+       }
+       const std::string &getDeviceID(void) const {
+           return deviceID;
+       }
+       const std::string getClassName(void) const {
+           return klassName();
+       }
+       const MessageType getType(void) const
+       {
+           MessageType type = Request;
+           return type;
+       }
+       void print(void) const {
+           std::cout<<"TRM Message UpdateTunerActivityStatus"<< std::endl;
+           std::cout<< "[MSG] klassName: "<<klassName() <<std::endl;
+           std::cout<< "[MSG] requestID: "<<getUUID() <<std::endl;
+           std::cout<< "[MSG] deviceId: "<<getDeviceID() <<std::endl;
+           std::cout<< "[MSG] tunerId: "<<getTunerId() <<std::endl;
+           std::cout<< "[MSG] tunerActivityStatus: "<<getTunerActivityStatus() <<std::endl;
+       }
+
+       ~UpdateTunerActivityStatus(void){}
+
+private:
+     std::string uuid;
+     std::string deviceID;
+     std::string tunerId;
+     std::string activityStatus;
+};
+
 TRM_END_NAMESPACE
 
 #endif

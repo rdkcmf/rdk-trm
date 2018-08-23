@@ -145,6 +145,10 @@ void JsonDecoder::decode(std::vector<uint8_t> &in)
 	else if (klass == Klass::kGetTRMConnectionEvents) {
 		JsonDecode<GetTRMConnectionEvents>(handle, processor);
 	}
+        else if (klass == Klass::kUpdateTunerActivityStatus) {
+                JsonDecode<UpdateTunerActivityStatus>(handle, processor);
+        }
+
 	else
 	{
 		SafeAssert(0);

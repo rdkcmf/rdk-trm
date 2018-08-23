@@ -1586,6 +1586,79 @@ void JsonDecode(int handle, GetVersionResponse & message)
 	}
 }
 
+void JsonEncode(const UpdateTunerActivityStatus &r, std::vector<uint8_t> &out)
+{
+        json_t * parent = json_object();
+        //Add parent
+        if (parent == 0) {
+
+        }
+        else
+        {//Add parent
+
+                json_object_set_new(parent, r.getClassName().c_str(), json_object());
+
+                {//Add child
+                        json_t *JT_notification = json_object_get(parent,  r.getClassName().c_str());
+                        json_object_set_new(JT_notification,   "requestId",             json_string(r.getUUID().c_str()));
+                        json_object_set_new(JT_notification,   "device",             json_string(r.getDeviceID().c_str()));
+                        json_object_set_new(JT_notification,   "tunerId",              json_string(r.getTunerId().c_str()));
+                        json_object_set_new(JT_notification,   "tunerActivityStatus",             json_string(r.getTunerActivityStatus().c_str()));
+                }
+
+                json_dump_callback(parent, vector_dump_callback, &out, JSON_INDENT(4) | JSON_PRESERVE_ORDER);
+                json_decref(parent);
+        }
+}
+
+void JsonDecode(int handle, UpdateTunerActivityStatus & message)
+{
+        json_t * parent = (json_t *)handle;
+        if (parent == 0) {
+        }
+        else
+        //Decode parent
+        {
+                const char *key;
+                json_t *value;
+                json_object_foreach(parent, key, value){
+                        //first key is "className", first value is json object.
+                        Assert(json_object_size(parent) == 1);
+                        json_t *JT_notification = value;
+                        {
+                                json_t *JT_requestId                    = json_object_get(JT_notification, "requestId");
+                                json_t *JT_device             = json_object_get(JT_notification, "device");
+                                json_t *JT_tunerId                      = json_object_get(JT_notification, "tunerId");
+                                json_t *JT_activity                               = json_object_get(JT_notification, "tunerActivityStatus");
+
+
+                                const char *requestId                   = json_string_value(JT_requestId);
+                                const char *device                      = json_string_value(JT_device);
+                                const char *tunerId                     = json_string_value(JT_tunerId);
+                                const char *activity                      = json_string_value(JT_activity);
+
+                                Assert(requestId != 0);
+                                Assert(device != 0);
+                                Assert(tunerId != 0);
+                                Assert(activity != 0);
+
+                                std::cout << "[DEC][" << UpdateTunerActivityStatus::klassName() << "]requestId = "              << requestId                << std::endl;
+                                std::cout << "[DEC][" << UpdateTunerActivityStatus::klassName() << "]device = "   << device << std::endl;
+
+                                std::cout << "[DEC][" << UpdateTunerActivityStatus::klassName() << "]tunerId = "   << tunerId << std::endl;
+
+                                std::cout << "[DEC][" << UpdateTunerActivityStatus::klassName() << "]tunerActivityStatus = "                        <<  activity                   << std::endl;
+
+                                message = UpdateTunerActivityStatus(requestId,device,tunerId,activity);
+                                message.print();
+                        }
+                }
+                json_decref(parent);
+        }
+
+}
+
+
 /*
  * notifyTunerReservationRelease" =:
  * {

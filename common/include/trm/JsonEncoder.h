@@ -65,6 +65,7 @@ void JsonEncode(const NotifyTunerStatesUpdate &r, std::vector<uint8_t> &out);
 void JsonEncode(const NotifyTunerPretune &r, std::vector<uint8_t> &out);
 void JsonEncode(const NotifyClientConnectionEvent &r, std::vector<uint8_t> &out);
 void JsonEncode(const GetTRMConnectionEvents &r, std::vector<uint8_t> &out);
+void JsonEncode(const UpdateTunerActivityStatus &r, std::vector<uint8_t> &out);
 
 
 

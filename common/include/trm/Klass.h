@@ -90,7 +90,10 @@ public:
 	static const Enum<Klass> kNotifyTunerPretune;
 	static const Enum<Klass> kNotifyClientConnectionEvent;
 		
-	static const Enum<Klass> kGetTRMConnectionEvents;	
+	static const Enum<Klass> kGetTRMConnectionEvents;
+
+	static const Enum<Klass> kUpdateTunerActivityStatus;
+	static const Enum<Klass> kUpdateTunerActivityStatusResponse;
 
 	static const std::vector<const Enum<Klass> * > & getEnums(void);
 

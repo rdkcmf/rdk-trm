@@ -86,6 +86,7 @@ public:
 	void operator() (const GetVersion &msg);
 	void operator() (const CancelLive &msg);
 	void operator() (const CancelLiveResponse &msg);
+	void operator() (const UpdateTunerActivityStatus &msg);
 
 private:
 
