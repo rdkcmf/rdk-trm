@@ -1756,6 +1756,30 @@ void Execute(Executor<GetVersion> &exec)
 	SerializeMessage(exec.messageOut, exec.getClientId(), out);
 	::serverInstance->getConnection(exec.getClientId()).sendAsync(out);
 }
+
+void Execute(Executor<UpdateTunerActivityStatus> &exec)
+{
+    const UpdateTunerActivityStatus &request = exec.messageIn;
+    UpdateTunerActivityStatusResponse response(request.getUUID());
+    try {
+        std::vector<uint8_t> out;
+        SerializeMessage(request, Connection::kTunerAgentId, out);
+        ::serverInstance->getConnection(Connection::kTunerAgentId).sendAsync(out);
+        //Send UpdateTunerActivityStatusResponse response
+        exec.messageOut = response;
+        {
+             Log() << "Sending UpdateTunerActivityStatusResponse: " << std::endl;
+                  std::vector<uint8_t> out;
+                  SerializeMessage(exec.messageOut, exec.getClientId(), out);
+                  ::serverInstance->getConnection(exec.getClientId()).sendAsync(out);
+        }
+
+    }
+    catch(...) {
+    }
+
+}
+
 #if 1
 void Execute(Executor<CancelLive> &exec)
 {
