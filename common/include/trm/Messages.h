@@ -2231,6 +2231,39 @@ public:
 	std::string partnerId;
 };
 
+class UpdateTunerActivityStatusResponse : public ResponseBase {
+public:
+        static const char *klassName(void) { return Klass::kUpdateTunerActivityStatusResponse; }
+        UpdateTunerActivityStatusResponse(const std::string &uuid = "")
+        : ResponseBase(klassName(), uuid, ResponseStatus(ResponseStatus::kOk)) {}
+
+       void print(void) const {
+           std::cout<<"UpdateTunerActivityStatusResponse "<< std::endl;
+       }
+
+};
+
+class UpdateTunerActivityStatus: public RequestBase {
+public:
+       typedef UpdateTunerActivityStatusResponse ResponseType;
+       static const char *klassName(void) { return Klass::kUpdateTunerActivityStatus; }
+       UpdateTunerActivityStatus(void): RequestBase(klassName(), "", ""){}
+       UpdateTunerActivityStatus(const std::string &UUID, const std::string &device,const std::string & activityStatus): RequestBase( klassName(), UUID, device),activityStatus(activityStatus){}
+
+       const std::string &getTunerActivityStatus(void) const {
+           return activityStatus;
+       }
+       void print(void) const {
+           std::cout<<"TRM Message UpdateTunerActivityStatus"<< std::endl;
+           std::cout<< "[OBJ] tunerActivityStatus: "<<getTunerActivityStatus() <<std::endl;
+       }
+
+       ~UpdateTunerActivityStatus(void){}
+
+private:
+     std::string activityStatus;
+};
+
 TRM_END_NAMESPACE
 
 #endif

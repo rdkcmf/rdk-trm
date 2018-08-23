@@ -63,6 +63,7 @@ void JsonDecode(int handle, NotifyTunerStatesUpdate & message);
 void JsonDecode(int handle, NotifyTunerPretune & message);
 void JsonDecode(int handle, NotifyClientConnectionEvent & message);
 void JsonDecode(int handle, GetTRMConnectionEvents & message);
+void JsonDecode(int handle, UpdateTunerActivityStatus & message);
 
 
 

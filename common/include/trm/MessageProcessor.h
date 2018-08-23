@@ -67,6 +67,7 @@ public:
 	virtual void operator() (const NotifyTunerPretune &msg) 	         {process(msg);}
 	virtual void operator() (const NotifyClientConnectionEvent &msg) 	 {process(msg);}
 	virtual void operator() (const GetTRMConnectionEvents &msg) 	 	 {process(msg);}
+        virtual void operator() (const UpdateTunerActivityStatus &msg)              {process(msg);}
 
 
 	virtual ~MessageProcessor(void) {}
