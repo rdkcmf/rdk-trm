@@ -160,34 +160,6 @@ std::ostream & Log(void)
     return std::cout << Timestamp ;
 }
 
-#if 0
-std::string GetReceiverId(void)
-{
-	static char receiverId[129] = {0};
-	if (receiverId[0] == 0) {
-		struct stat buf;
-		if (stat("/opt/www/whitebox/wbdevice.dat", &buf) == 0) {
-			off_t fileSize = buf.st_size;
-			/* Read all file */
-			int fd = open("/opt/www/whitebox/wbdevice.dat", O_RDONLY);
-			if (fd >= 0) {
-				int readCount = read(fd, receiverId, (size_t)(fileSize > 128 ? 128 : fileSize));
-				if (readCount == fileSize) {
-					receiverId[readCount] = '\0';
-					printf("localHost ReceiverId = [%s]\r\n", receiverId);
-				}
-				else {
-					receiverId[0] = '\0';
-				}
-
-			}
-		}
-	}
-
-	return receiverId;
-}
-#endif
-
 std::string GetAuthToken(const char *generateTokenRequest)
 {
 	static std::string responseBody;

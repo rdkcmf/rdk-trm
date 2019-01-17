@@ -66,7 +66,6 @@ void HexDump(const std::vector<uint8_t> &in);
 uint64_t GetCurrentEpoch(void);
 std::ostream & Timestamp (std::ostream &os);
 std::ostream & Log (void);
-std::string GetReceiverId();
 std::string GetAuthToken(const char *generateTokenRequest);
 const SpecVersion &GetSpecVersion(void);
 TRM_END_NAMESPACE
