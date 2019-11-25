@@ -19,7 +19,7 @@
 
 [Unit]
 Description=Websocket Server Proxy
-After=lighttpd.service network-online.target trm-srv.service moca.service
+After=lighttpd.service network-online.target authservice.service trm-srv.service moca.service
 Requires=network-online.target trm-srv.service
 
 [Service]
