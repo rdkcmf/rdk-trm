@@ -19,7 +19,7 @@
 
 [Unit]
 Description=TRM Websocket Server
-After=lighttpd.service network-online.target
+After=lighttpd.service authservice.service network-online.target
 Requires=network-online.target wsproxy.service
 
 [Service]

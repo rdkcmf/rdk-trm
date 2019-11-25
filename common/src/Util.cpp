@@ -196,7 +196,7 @@ std::string GetAuthToken(const char *generateTokenRequest)
 	    }
 	}
 
-	if (response.size() > 0) {
+	if (response.size() > 0 && (response.find("200 OK") != std::string::npos)) {
 		//Log() << "Response : \r\n [" << response << "] " << std::endl;
 		/* Get to the body part */
 		size_t startPos = response.find("\r\n\r\n");
