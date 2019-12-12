@@ -46,6 +46,9 @@
 #include "ReservationCustomAttributes.h"
 #include "Util.h"
 
+#define DEVICEID_SCRIPT_PATH "/lib/rdk/getDeviceId.sh"
+#define SCRIPT_OUTPUT_BUFFER_SIZE 512
+
 TRM_BEGIN_NAMESPACE
 
 static void json_dump_error(const std::string & title, const json_error_t &error);
@@ -2089,19 +2092,22 @@ int JsonDecode(const std::vector<uint8_t> &in, GenerateAuthTokenResponseFromAuth
 std::string GetDeviceId()
 {
     static std::string deviceId;
+    //DELIA-39464 - Getting the device ID from /lib/rdk/getDeviceId.sh
+    FILE *deviceIdScript = NULL;
+    char scriptoutput[SCRIPT_OUTPUT_BUFFER_SIZE] = {0};
     if (!deviceId.empty()) return deviceId;
+    deviceIdScript = popen(DEVICEID_SCRIPT_PATH, "r"); // pipe open the script
+    if( (NULL != deviceIdScript) && deviceId.empty() ){ //Read the output from script
+        if(fgets(scriptoutput,SCRIPT_OUTPUT_BUFFER_SIZE,deviceIdScript)!=NULL){
+            std::string jsonResponse_(scriptoutput); //convert the output to sting object.
+            std::vector<uint8_t> jsonResponse(jsonResponse_.begin(), jsonResponse_.end());
+            GenerateAuthTokenResponseFromAuthService response;
+            JsonDecode(jsonResponse, response); //parse the jason format string to object
 
-    if (deviceId.empty()) {
-        static char generateTokenRequest[] = "GET /authService/getDeviceId HTTP/1.0\r\n\r\n";
-        std::string jsonResponse_ = GetAuthToken(generateTokenRequest);
-        std::vector<uint8_t> jsonResponse(jsonResponse_.begin(), jsonResponse_.end());
-        GenerateAuthTokenResponseFromAuthService response;
-        JsonDecode(jsonResponse, response);
-
-        Log() << "AuthService::DeviceId = [" << response.deviceId << "]" << std::endl;
-        deviceId = response.deviceId;
+            Log() << "AuthService::DeviceId = [" << response.deviceId << "]" << std::endl;
+            deviceId = response.deviceId;
+        }
     }
-
     if (deviceId.empty()) {
         static char generateTokenRequest[] = "GET /device/generateAuthToken HTTP/1.0\r\n\r\n";
         std::string jsonResponse_ = GetAuthToken(generateTokenRequest);
@@ -2112,6 +2118,9 @@ std::string GetDeviceId()
         Log() << "WhiteBox::DeviceId = [" << response.deviceId << "]" << std::endl;
         deviceId = response.deviceId;
     }
+    if(NULL != deviceIdScript)
+        pclose(deviceIdScript);
+
     return deviceId;
 }
 
