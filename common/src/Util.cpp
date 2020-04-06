@@ -60,8 +60,13 @@ static int connect_to_authServer(const char *ip, int port, int *auth_fd)
     auth_address.sin_port = htons(port);
 
     socket_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if(socket_fd < 0)
+    {
+        Log() << "Socket creation failed with errno : " << errno;  //CID:18159-Resolve the negative returns
+        return -1;
+    }
     Log() <<  "Connecting to " << ip << " : " << port << std::endl;
-    while(socket_fd >= 0) {
+    while(1) {
         int retry_count = 10;
         socket_error = connect(socket_fd, (struct sockaddr *) &auth_address, sizeof(struct sockaddr_in));
         if (socket_error == ECONNREFUSED  && retry_count > 0) {

@@ -1049,7 +1049,7 @@ public:
 	static const char *klassName(void) { return Klass::kReleaseTunerReservationResponse; }
 
 	ReleaseTunerReservationResponse(const std::string &uuid = "", const std::string &reservationToken = "")
-	: SimpleTRMResponse(klassName(), uuid, ResponseStatus(ResponseStatus::kOk), reservationToken) {}
+	: SimpleTRMResponse(klassName(), uuid, ResponseStatus(ResponseStatus::kOk), reservationToken), released(false) {}  //CID:18199-Initialize released
 
 	ReleaseTunerReservationResponse(const std::string    &uuid,
 									const ResponseStatus &status,
@@ -1121,7 +1121,7 @@ public:
 	static const char *klassName(void) { return Klass::kValidateTunerReservationResponse; }
 
 	ValidateTunerReservationResponse(const std::string &uuid = "", const std::string &reservationToken = "")
-	: SimpleTRMResponse(klassName(), uuid, ResponseStatus(ResponseStatus::kOk), reservationToken) {}
+	: SimpleTRMResponse(klassName(), uuid, ResponseStatus(ResponseStatus::kOk), reservationToken) , valid(true) {}  //CID:18362-Initialize valid
 
 	ValidateTunerReservationResponse(const std::string    &uuid,
 									 const ResponseStatus &status,
@@ -1197,8 +1197,8 @@ public:
 	static const char *klassName(void) { return Klass::kCancelRecordingResponse; }
 
 	CancelRecordingResponse(const std::string &uuid = "", const std::string &reservationToken = "")
-	: SimpleTRMResponse(klassName(), uuid, ResponseStatus(ResponseStatus::kOk), reservationToken)
-	  {}
+	: SimpleTRMResponse(klassName(), uuid, ResponseStatus(ResponseStatus::kOk), reservationToken), canceled(false)
+	  {}  //CID:18282-Initialize canceled
 
 	CancelRecordingResponse(const std::string    &uuid,
 			 	 	 	 	const ResponseStatus &status,
@@ -2104,7 +2104,7 @@ public:
 	static const char *klassName(void) { return Klass::kNotifyClientConnectionEvent; }
 
 	NotifyClientConnectionEvent(const std::string &uuid = "")
-	: NotificationBase(klassName(), uuid){}
+	: NotificationBase(klassName(), uuid),timeStamp(0){}  //CID:18484-Initialize timeStamp
 
 	NotifyClientConnectionEvent(const std::string &uuid,const std::string &eventName, const std::string &clientIP, uint64_t timeStamp)
 	: NotificationBase(klassName(), uuid),
