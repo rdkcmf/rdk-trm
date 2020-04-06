@@ -172,7 +172,7 @@ public:
 	: reservationToken(""), device(""), serviceLocator(""),
 	  startTime(0), duration(0),
 	  activity(Activity::kNone),
-	  customAttributes(0) {};
+	  customAttributes(0),state(0) {};  //CID:18524-Initialize  state
 
 	TunerReservationBase(const std::string &device,
 	         	 	     const std::string &serviceLocator,

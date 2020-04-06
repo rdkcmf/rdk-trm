@@ -346,52 +346,49 @@ static void JsonEncode(const DetailedTunerState &r, json_t *parent)
 static void JsonDecode(json_t * parent, DetailedTunerState & detailedState)
 {
 	//Decode parent
+        json_t *JT_reservation = parent;
+	json_t *JT_state 				= json_object_get(JT_reservation, "state");
+	json_t *JT_serviceLocator 		= json_object_get(JT_reservation, "serviceLocator");
+	json_t *JT_owners 			    = json_object_get(JT_reservation, "owners");
+	json_t *JT_reservedDeviceId   	= json_object_get(JT_reservation, "reservedDeviceId");
+
+	const char* state    			= json_string_value (JT_state);
+	const char* serviceLocator     	= JT_serviceLocator ? json_string_value (JT_serviceLocator) : "";
+
+	std::cout << "[DEC][DetailedTunerState] state = "			<< state << std::endl;
+	if (JT_serviceLocator) {
+		std::cout << "[DEC][DetailedTunerState] serviceLocator = "	<< serviceLocator	<< std::endl;
+	}
+	detailedState.setState(state, serviceLocator);
+
+	//Decode child.
+	if (JT_owners)
 	{
-		json_t *JT_reservation = parent;
-		{
-			json_t *JT_state 				= json_object_get(JT_reservation, "state");
-			json_t *JT_serviceLocator 		= json_object_get(JT_reservation, "serviceLocator");
-			json_t *JT_owners 			    = json_object_get(JT_reservation, "owners");
-			json_t *JT_reservedDeviceId   	= json_object_get(JT_reservation, "reservedDeviceId");
-
-			const char* state    			= json_string_value (JT_state);
-			const char* serviceLocator     	= JT_serviceLocator ? json_string_value (JT_serviceLocator) : "";
-
-			std::cout << "[DEC][DetailedTunerState] state = "			<< state << std::endl;
-			if (JT_serviceLocator) {
-				std::cout << "[DEC][DetailedTunerState] serviceLocator = "	<< serviceLocator	<< std::endl;
-			}
-			detailedState.setState(state, serviceLocator);
-
-			//Decode child.
-			if (JT_owners)
-			{
-				//Assert(json_object_size(JT_owners) >= 1);
-				const char *key;
-				json_t *value;
-				json_object_foreach(JT_owners, key, value){
-					const char *activity = key;
-					json_t *JT_ownersActivity = value;
-					{
+		//Assert(json_object_size(JT_owners) >= 1);
+		const char *key;
+		json_t *value;
+		json_object_foreach(JT_owners, key, value){
+			const char *activity = key;
+			json_t *JT_ownersActivity = value;
                         json_t *JT_ownerActivityDevice = json_object_get(JT_ownersActivity, "device");
-						const char *device      = json_string_value(JT_ownerActivityDevice);
-						std::cout << "[DEC][DetailedTunerState][owners][" << activity << "]"
-								     "[device] = " << (device != 0 ? device : "ABC") 	<< std::endl;
-						detailedState.addTunerOwner(activity, device);
-					}
-				}
+			const char *device      = json_string_value(JT_ownerActivityDevice);
+			if(device == 0) {
+				std::cout << "[ERROR][JsonDecode : ReserveTuner] NULL Device "<< std::endl;  //CID:18250 - Forward null issue
+				return;
 			}
-
-			if (JT_reservedDeviceId) {
-				const char* reservedDeviceId    = json_string_value (JT_reservedDeviceId);
-				detailedState.setReservedDeviceId(reservedDeviceId);
-				std::cout << "[DEC][DetailedTunerState] reservedDeviceId = "	<< reservedDeviceId	<< std::endl;
-			}
-			else {
-				std::cout << "[DEC][DetailedTunerState] reservedDeviceId = "	<< "NONE" << std::endl;
-			}
-
+			std::cout << "[DEC][DetailedTunerState][owners][" << activity << "]"
+						"[device] = " << device << std::endl;
+			detailedState.addTunerOwner(activity, device);
 		}
+	}
+
+	if (JT_reservedDeviceId) {
+		const char* reservedDeviceId    = json_string_value (JT_reservedDeviceId);
+		detailedState.setReservedDeviceId(reservedDeviceId);
+		std::cout << "[DEC][DetailedTunerState] reservedDeviceId = "	<< reservedDeviceId	<< std::endl;
+	}
+	else {
+		std::cout << "[DEC][DetailedTunerState] reservedDeviceId = "	<< "NONE" << std::endl;
 	}
 }
 
@@ -482,9 +479,12 @@ void JsonDecode(int handle, ReserveTuner & message)
 				const char *resurrect = (JT_resurrect ? json_string_value(JT_resurrect) : "false");
 
 				Assert(resurrect != 0);
-
+				if(device == 0) {
+					std::cout << "[ERROR][JsonDecode : ReserveTuner] NULL Device "<< std::endl;  //CID:18576 - Forward null issue
+					return;
+				}
 				std::cout << "[DEC][ReserveTuner] requestId = "<< requestId 					<< std::endl;
-				std::cout << "[DEC][ReserveTuner] device = "	<< (device != 0 ? device : "") 	<< std::endl;
+				std::cout << "[DEC][ReserveTuner] device = "	<< device << std::endl;
 				std::cout << "[DEC][ReserveTuner] resurrect = "<< resurrect 					<< std::endl;
 				
 				{
