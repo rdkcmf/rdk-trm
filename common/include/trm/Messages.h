@@ -2248,20 +2248,30 @@ public:
        typedef UpdateTunerActivityStatusResponse ResponseType;
        static const char *klassName(void) { return Klass::kUpdateTunerActivityStatus; }
        UpdateTunerActivityStatus(void): RequestBase(klassName(), "", ""){}
-       UpdateTunerActivityStatus(const std::string &UUID, const std::string &device,const std::string & activityStatus): RequestBase( klassName(), UUID, device),activityStatus(activityStatus){}
+       UpdateTunerActivityStatus(const std::string &UUID, const std::string &device,const std::string & activityStatus,const std::string & lastActivityTimeStamp, const std::string & lastActivityAction): RequestBase( klassName(), UUID, device),activityStatus(activityStatus),lastActivityTimeStamp(lastActivityTimeStamp),lastActivityAction(lastActivityAction){}
 
        const std::string &getTunerActivityStatus(void) const {
            return activityStatus;
        }
+       const std::string &getLastActivityTimeStamp(void) const {
+           return lastActivityTimeStamp;
+       }
+       const std::string &getLastActivityAction(void) const {
+           return lastActivityAction;
+       }
        void print(void) const {
            std::cout<<"TRM Message UpdateTunerActivityStatus"<< std::endl;
            std::cout<< "[OBJ] tunerActivityStatus: "<<getTunerActivityStatus() <<std::endl;
+           std::cout<< "[OBJ] lastActivityTimeStamp: "<<getLastActivityTimeStamp() <<std::endl;
+           std::cout<< "[OBJ] lastActivityAction: "<<getLastActivityAction() <<std::endl;
        }
 
        ~UpdateTunerActivityStatus(void){}
 
 private:
      std::string activityStatus;
+     std::string lastActivityTimeStamp;
+     std::string lastActivityAction;
 };
 
 TRM_END_NAMESPACE

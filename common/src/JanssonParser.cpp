@@ -1469,6 +1469,8 @@ void JsonEncode(const UpdateTunerActivityStatus &r, std::vector<uint8_t> &out)
                         json_object_set_new(JT_notification,   "requestId",             json_string(r.getUUID().c_str()));
                         json_object_set_new(JT_notification,   "device",             json_string(r.getDevice().c_str()));
                         json_object_set_new(JT_notification,   "tunerActivityStatus",             json_string(r.getTunerActivityStatus().c_str()));
+                        json_object_set_new(JT_notification,   "lastActivityTimeStamp",             json_string(r.getLastActivityTimeStamp().c_str()));
+                        json_object_set_new(JT_notification,   "lastActivityAction",             json_string(r.getLastActivityAction().c_str()));
                 }
 
                 json_dump_callback(parent, vector_dump_callback, &out, JSON_INDENT(4) | JSON_PRESERVE_ORDER);
@@ -1494,22 +1496,30 @@ void JsonDecode(int handle, UpdateTunerActivityStatus & message)
                                 json_t *JT_requestId                    = json_object_get(JT_notification, "requestId");
                                 json_t *JT_device             = json_object_get(JT_notification, "device");
                                 json_t *JT_activity                               = json_object_get(JT_notification, "tunerActivityStatus");
+                                json_t *JT_lastActivityTS     = json_object_get(JT_notification, "lastActivityTimeStamp");
+                                json_t *JT_lastActivityAction                               = json_object_get(JT_notification, "lastActivityAction");
 
 
                                 const char *requestId                   = json_string_value(JT_requestId);
                                 const char *device                      = json_string_value(JT_device);
                                 const char *activity                      = json_string_value(JT_activity);
+                                const char *lastActivityTS                      = json_string_value(JT_lastActivityTS);
+                                const char *lastActivityAction                      = json_string_value(JT_lastActivityAction);
 
                                 Assert(requestId != 0);
                                 Assert(device != 0);
                                 Assert(activity != 0);
+                                if(lastActivityTS == NULL ) lastActivityTS = "";
+                                if(lastActivityAction == NULL ) lastActivityAction = "";
 
                                 std::cout << "[DEC][" << UpdateTunerActivityStatus::klassName() << "]requestId = "              << requestId                << std::endl;
                                 std::cout << "[DEC][" << UpdateTunerActivityStatus::klassName() << "]device = "   << device << std::endl;
 
                                 std::cout << "[DEC][" << UpdateTunerActivityStatus::klassName() << "]tunerActivityStatus = "                        <<  activity                   << std::endl;
+                                std::cout << "[DEC][" << UpdateTunerActivityStatus::klassName() << "]lastActivityTimeStamp = "                        <<  lastActivityTS             << std::endl;
+                                std::cout << "[DEC][" << UpdateTunerActivityStatus::klassName() << "]lastActivityAction = "                        <<  lastActivityAction         << std::endl;
 
-                                message = UpdateTunerActivityStatus(requestId,device,activity);
+                                message = UpdateTunerActivityStatus(requestId,device,activity,lastActivityTS,lastActivityAction);
                                 message.print();
                         }
                 }
