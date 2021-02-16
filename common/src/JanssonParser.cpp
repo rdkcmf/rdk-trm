@@ -45,6 +45,7 @@
 
 #include "ReservationCustomAttributes.h"
 #include "Util.h"
+#include "safec_lib.h"
 
 #define DEVICEID_SCRIPT_PATH "/lib/rdk/getDeviceId.sh"
 #define SCRIPT_OUTPUT_BUFFER_SIZE 512
@@ -185,9 +186,15 @@ static void JsonDecode(json_t * parent, Activity& r)
 #if 1
 				/* Enable to test EAS feature */
 				struct stat buf;
-				if ((stat("/tmp/testTRMEAS", &buf) == 0) && strcmp(name, "Live") == 0){
-					std::cout << "Test Live Tune with EAS flag" << std::endl;
-					r.addDetail("eas", "true");
+				errno_t safec_rc = -1;
+				int ind = -1;
+				if (stat("/tmp/testTRMEAS", &buf) == 0) {
+					safec_rc = strcmp_s("Live", strlen("Live"), name, &ind);
+					ERR_CHK(safec_rc);
+					if((safec_rc == EOK) && (ind == 0)) {
+						std::cout << "Test Live Tune with EAS flag" << std::endl;
+						r.addDetail("eas", "true");
+					}
 				}
 #endif
 

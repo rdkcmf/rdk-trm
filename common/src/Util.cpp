@@ -46,6 +46,7 @@
 #include "uuid/uuid.h"
 #include "trm/TRM.h"
 #include "Util.h"
+#include "safec_lib.h"
 
 TRM_BEGIN_NAMESPACE
 
@@ -53,8 +54,7 @@ static int connect_to_authServer(const char *ip, int port, int *auth_fd)
 {
     int socket_fd = -1;
     int socket_error = 0;
-    struct sockaddr_in auth_address;
-    memset(&auth_address, 0, sizeof(auth_address));
+    struct sockaddr_in auth_address = {0};
     auth_address.sin_family = AF_INET;
     auth_address.sin_addr.s_addr = inet_addr(ip);
     auth_address.sin_port = htons(port);
@@ -144,10 +144,11 @@ std::ostream & Timestamp (std::ostream &os)
 {
     struct tm __tm;                                             
     struct timeval __tv;                                        
-    char buf[64]={'\0'};
+    char buf[64];
+    errno_t safec_rc = -1;
     gettimeofday(&__tv, NULL);                                  
     localtime_r(&__tv.tv_sec, &__tm);                          
-    sprintf(buf, "%02d%02d%02d-%02d:%02d:%02d:%06d [tid=%ld] ",                 
+    safec_rc = sprintf_s(buf,sizeof(buf), "%02d%02d%02d-%02d:%02d:%02d:%06d [tid=%ld] ",
             __tm.tm_year+1900-2000,                             
             __tm.tm_mon+1,                                      
             __tm.tm_mday,                                     
@@ -155,7 +156,10 @@ std::ostream & Timestamp (std::ostream &os)
             __tm.tm_min,                                    
             __tm.tm_sec,                                   
             (int)__tv.tv_usec, 
-            syscall(SYS_gettid)); 
+            syscall(SYS_gettid));
+    if(safec_rc < EOK) {
+      ERR_CHK(safec_rc);
+    }
     os << buf;
     return os;
 }

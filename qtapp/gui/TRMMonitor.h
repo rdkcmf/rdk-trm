@@ -39,6 +39,7 @@
 #include "trm/JsonEncoder.h"
 #include "trm/Header.h"
 #include "trm/MessageProcessor.h"
+#include "safec_lib.h"
 
 namespace TRM {
 
@@ -75,7 +76,8 @@ public:
 		}
 		Header header(Request, outClientId, out.size() - Header::kHeaderLength);
 		header.serialize(headerBytes);
-		memcpy(&out[0], &headerBytes[0], Header::kHeaderLength);
+		errno_t safec_rc = memcpy_s(&out[0], out.size(), &headerBytes[0], Header::kHeaderLength);
+		ERR_CHK(safec_rc);
 	}
 
 	MessageProcessor & getMessageProcessor(uint32_t inClientId) {

@@ -53,6 +53,7 @@
 #include <QDateTime>
 
 #include "qt_websocketproxy.h"
+#include "safec_lib.h"
 
 static const int  header_length = 16;
 
@@ -166,11 +167,10 @@ static int connect_to_trm(const char *ip, int port, int *trm_fd)
 {
     int socket_fd = -1;
     int socket_error = 0;
-    struct sockaddr_in trm_address;
+    struct sockaddr_in trm_address = {0};
     trm_address.sin_family = AF_INET;
     trm_address.sin_addr.s_addr = inet_addr(ip);
     trm_address.sin_port = htons(port);
-    memset(trm_address.sin_zero, 0, sizeof(trm_address.sin_zero));
 
     socket_fd = socket(AF_INET, SOCK_STREAM, 0);
     __TIMESTAMP(); fprintf(_TRMPRX_OUT_, "Connecting to remote\r\n");
@@ -236,14 +236,15 @@ int websocket_disconnect_callback(void *conn)
     /* Notify TRM with Device IP infomration.*/
     if (wssocket) 
     {
-        char eventString[256] = "";
+        char eventString[256];
         QString ipString = wssocket->peerAddress().toString();
         qint64 currentEpoch = QDateTime(QDate::currentDate(), QTime::currentTime()).toMSecsSinceEpoch();
         std::string reason = "TRM_Event_Disconnect";
 
-        memset(eventString,'\0',sizeof(eventString));
-
-        int length = sprintf(eventString,"{ \"notifyClientConnectionEvent\": { \"eventName\" :\"%s\",\"clientIP\" : \"%s\",\"timeStamp\": %lld } }",reason.c_str(),ipString.toUtf8().data(),currentEpoch);
+        int length = sprintf_s(eventString,sizeof(eventString),"{ \"notifyClientConnectionEvent\": { \"eventName\" :\"%s\",\"clientIP\" : \"%s\",\"timeStamp\": %lld } }",reason.c_str(),ipString.toUtf8().data(),currentEpoch);
+        if(length < EOK) {
+           ERR_CHK(length);
+        }
         websocket_data_callback(conn, 0, &eventString[0],length);
 
          //__TIMESTAMP(); printf("Disconnected from IP -[%s]  and Size [%d] \r\n",ipString.toUtf8().data(),ipString.size());
@@ -313,7 +314,8 @@ int websocket_data_callback(void *conn, int flags, char *trm_data, size_t trm_da
         /* Read payload from ws*/
 
         if (payload_length > 0) {
-            memcpy((void *)&buf[idx], trm_data, payload_length);
+            errno_t safec_rc = memcpy_s((void *)&buf[idx], payload_length, trm_data, payload_length);
+            ERR_CHK(safec_rc);
         }
 
         for (idx = 0; idx < (header_length); idx++) {

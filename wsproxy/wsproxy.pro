@@ -47,6 +47,14 @@ LIBS += -L${RDK_FSROOT_PATH}/usr/lib
 }
 LIBS += -lrdkloggers -llog4c
 
+contains(DEFINES, USE_SAFEC_API) {
+CONFIG += link_pkgconfig
+PKGCONFIG += libsafec
+}
+
+!contains(DEFINES, USE_SAFEC_API) {
+QMAKE_CXXFLAGS += -DSAFEC_DUMMY_API
+}
 
 QT += network
 QT -= gui    

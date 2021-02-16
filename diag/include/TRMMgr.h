@@ -38,7 +38,7 @@ using namespace std;
 #define IARM_BUS_TRMMGR_API_GetTRMDiagInfo               "GetTRMDiagInfo" /*!< Get TRM Message */
 
 
-#define MAX_PAYLOAD_LEN         32767 // need to re-visit the size . TBD
+#define MAX_PAYLOAD_LEN         4096 // need to re-visit the size . TBD
 
 
 typedef enum {

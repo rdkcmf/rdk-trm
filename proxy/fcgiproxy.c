@@ -35,6 +35,7 @@
 #include <errno.h>
 #include <unistd.h>
 #include "rdk_debug.h"
+#include "safec_lib.h"
 
 enum MessageType {
 	REQUEST = 0x1234,
@@ -49,10 +50,8 @@ static int connect_to_trm(const char *ip, int port, int *trm_fd)
 {
 	int socket_fd = -1;
 	int socket_error = 0;
-	struct sockaddr_in trm_address;
+	struct sockaddr_in trm_address = {0}; /*Initialize the struct - Coverty DELIA-4581*/
 
-	/*Initialize the struct - Coverty DELIA-4581*/
-	memset( &trm_address, 0, sizeof(trm_address));
 
 	trm_address.sin_family = AF_INET;
 	trm_address.sin_addr.s_addr = inet_addr(ip);
@@ -106,10 +105,14 @@ int main(int argc, char *argv[])
 	printf("Starting TRM-FastCGI-Proxy\r\n");
 	/* First create a persistent connection to TRM */
 	int is_connected = 0;
+	errno_t safec_rc = -1;
+	int ind = -1;
 
 	while (itr < argc)
         {
-                if(strcmp(argv[itr],"--debugconfig")==0)
+                safec_rc = strcmp_s("--debugconfig", strlen("--debugconfig"), argv[itr], &ind);
+                ERR_CHK(safec_rc);
+                if((safec_rc == EOK) && (ind == 0))
                 {
                         itr++;
                         if (itr < argc)

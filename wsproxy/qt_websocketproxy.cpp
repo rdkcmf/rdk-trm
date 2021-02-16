@@ -44,6 +44,7 @@
 #include <QtNetwork/QSslKey>
 #include <QSslCipher>
 #include <QSettings>
+#include "safec_lib.h"
 
 const char* trmPropertiesPath ="/etc/trmProxySetup.properties";
 const char* caKeyTagName = "CA_CHAIN_CERTIFICATE";
@@ -133,14 +134,13 @@ void PingPongTask::onPong(quint64 elapsedTime, QByteArray)
 /* Function to execute system command */
 static int exec_sys_command(char* cmd)
 {
-  char buff[128];
+  char buff[128] = {0};
   int len;
   FILE *syscmd = popen(cmd, "re");
   if(!syscmd){
 	  std::cout <<"popen failed with error code"<< syscmd <<"to execute system command: "<< cmd;
     return -1;
   }
-  memset(buff, 0, 128);
   std::cout << "Executing system command " << cmd << std::endl;
 
   while(fgets(buff, sizeof(buff), syscmd) != 0){
@@ -247,7 +247,11 @@ WebSocketProxy::WebSocketProxy(const QStringList &boundIPs, quint16 port, QObjec
 		        ++it;
 	        }
 	        char cmd[256];
-	        sprintf(cmd, "%s %s", "rm", keyFileName.toLatin1().data());
+		errno_t safec_rc = -1;
+		safec_rc = sprintf_s(cmd,sizeof(cmd), "rm %s", keyFileName.toLatin1().data());
+		if(safec_rc < EOK) {
+			ERR_CHK(safec_rc);
+		}
 	        exec_sys_command(cmd);
         }
 	}

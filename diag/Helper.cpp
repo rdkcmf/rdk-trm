@@ -65,13 +65,14 @@ using namespace std;
 #include "trm/Klass.h"
 #include "trm/TunerReservation.h"
 #include <pthread.h>
+#include "safec_lib.h"
 
 using namespace TRM;
 
 /*Connection and Message Processing Info*/
 
 /* Static variables */
-#define MAX_PAYLOAD_LEN 		32767
+#define MAX_PAYLOAD_LEN 	4096
 static int trm_diag_fd = -1;
 static const char* ip ="127.0.0.1";
 static int  port = 9987;
@@ -215,11 +216,13 @@ bool  TRMMgrHelperImpl::getVersion(uint32_t *length,char *responseMsg)
 
     int len = strlen((const char*)&out[0]);
     int retry_count = 5;
+    errno_t safec_rc = -1;
 
     do
     {
         TrmResponseRcvd = false;
-        memset(responseStr,0,sizeof(responseStr));
+        safec_rc =  memset_s(responseStr, sizeof(responseStr), 0, sizeof(responseStr));
+        ERR_CHK(safec_rc);
         ret = url_request_post( (char *) &out[0], len, kTRMMgrClientId);
         retry_count --;
     } while ((ret == false) && (retry_count >0));
@@ -230,11 +233,14 @@ bool  TRMMgrHelperImpl::getVersion(uint32_t *length,char *responseMsg)
         ret = waitForTRMResponse();
     }
 
-
 	// copy to response message for Requested Client
-	strncpy(responseMsg,responseStr,strlen(responseStr));
+	safec_rc = strcpy_s(responseMsg,MAX_PAYLOAD_LEN, responseStr);
+	if(safec_rc != EOK) {
+		ERR_CHK(safec_rc);
+		return false;
+	}
+
 	*length = strlen(responseStr);
-     responseMsg[*length + 1] = '\0';
 	
 	DIAG_DEBUG(("Message Length of getVersion response  = %d ...\r\n",*length));
 	DIAG_TRACE(("Exit %s():%d \r\n" , __FUNCTION__, __LINE__));
@@ -255,6 +261,7 @@ bool  TRMMgrHelperImpl::getTunerReservationsList(uint32_t *length,char *response
    	DIAG_TRACE(("Enter %s():%d \r\n" , __FUNCTION__, __LINE__));
    
     bool ret = false;
+    errno_t safec_rc = -1;
 
     if (NULL == responseMsg)
     {
@@ -267,11 +274,13 @@ bool  TRMMgrHelperImpl::getTunerReservationsList(uint32_t *length,char *response
 	
 	if (ret == true)
     {
-	
-		// copy to response message for Requested Client
-        strncpy(responseMsg,responseStr,strlen(responseStr));
+        // copy to response message for Requested Client
+        safec_rc = strcpy_s(responseMsg,MAX_PAYLOAD_LEN, responseStr);
+        if(safec_rc != EOK) {
+          ERR_CHK(safec_rc);
+          return false;
+        }
         *length = strlen(responseStr);
-        responseMsg[*length + 1] = '\0';
         DIAG_DEBUG(("Message Length of getTunerReservationsList = %d ...\r\n",*length));
     }
     else
@@ -368,12 +377,15 @@ static bool  getAllTunerReservationsResponse()
     out.push_back(0);
     int len = strlen((const char*)&out[0]);
     int retry_count = 5;
+    errno_t safec_rc = -1;
 
     do
     {
         //Post the message 
         TrmResponseRcvd = false;
-        memset(responseStr,0,sizeof(responseStr));
+        safec_rc =  memset_s(responseStr, sizeof(responseStr), 0, sizeof(responseStr));
+        ERR_CHK(safec_rc);
+
         ret = url_request_post( (char *) &out[0], len, kTRMMgrClientId);
         retry_count --;
     } while ((ret == false) && (retry_count >0));
@@ -616,6 +628,7 @@ static void* ProcessTRMMessage (void* arg)
 	char *buf = NULL;
 	const int header_length = 16;
 	unsigned int payload_length = 0;
+	errno_t safec_rc = -1;
 
 	DIAG_TRACE(("Enter %s():%d \r\n" , __FUNCTION__, __LINE__));
 
@@ -633,7 +646,9 @@ static void* ProcessTRMMessage (void* arg)
 				DIAG_WARN(("%s:%d :  Malloc failed for %d bytes \r\n", __FUNCTION__, __LINE__, header_length));
 				continue;
 			}
-			memset(buf, 0, header_length);
+
+			safec_rc = memset_s(buf, header_length, 0, header_length);
+			ERR_CHK(safec_rc);
 			
 					
 			/* Read Response from TRM, read header first, then payload */
@@ -665,7 +680,9 @@ static void* ProcessTRMMessage (void* arg)
 					fflush(stderr);
 
 					buf = (char *) malloc(payload_length+1);
-					memset(buf, 0, payload_length+1);
+					safec_rc = memset_s(buf, payload_length+1, 0, payload_length+1);
+					ERR_CHK(safec_rc);
+
 					read_trm_count = read(trm_diag_fd, buf, payload_length);
 					DIAG_DEBUG(("Read Payload from TRM %d vs expected %d\r\n", read_trm_count, payload_length));
 
@@ -728,10 +745,15 @@ static void processBuffer( const char* buf, int len)
 		DIAG_DEBUG(("Response %s \r\n", buf));
 		DIAG_DEBUG(("Response Length  %d - %d\r\n", strlen(buf),len));
 
-		memset(responseStr,0,sizeof(responseStr));
+		errno_t safec_rc = -1;
+		safec_rc = memset_s(responseStr, sizeof(responseStr), 0, sizeof(responseStr));
+		ERR_CHK(safec_rc);
 
 		std::vector<uint8_t> response;
-		strncpy(responseStr,buf,strlen(buf));
+
+		safec_rc = strcpy_s(responseStr, sizeof(responseStr), buf);
+		ERR_CHK(safec_rc);
+
 		response.insert( response.begin(), buf, buf+len);
 
 		MsgProcessor msgProc;
@@ -751,13 +773,12 @@ static int connect_to_trm()
 {
 	int socket_fd ;
 	int socket_error = 0;
-	struct sockaddr_in trm_address;
+	struct sockaddr_in trm_address = {0};
 
 	HelperLock();
 
 	DIAG_TRACE(("Enter %s():%d \r\n" , __FUNCTION__, __LINE__));
 	
-	memset(&trm_address, 0, sizeof(sockaddr_in));
 
 	if (is_connected == 0)
 	{

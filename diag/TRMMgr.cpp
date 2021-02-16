@@ -55,6 +55,7 @@ static IARM_Result_t _GetTRMDiagInfo(void *arg);
 #include "trm/Activity.h"
 #include "trm/JsonEncoder.h"
 #include "trm/JsonDecoder.h"
+#include "safec_lib.h"
 
 /* For connection sync */
 static char responseMsg[MAX_PAYLOAD_LEN];
@@ -94,8 +95,10 @@ static IARM_Result_t _GetTRMDiagInfo(void *arg)
     uint32_t length = 0;
     uint32_t errCount = 0;
     bool ret= false;
+    errno_t safec_rc = -1;
    
-    memset(responseMsg,0,sizeof(responseMsg));
+    safec_rc = memset_s(responseMsg, sizeof(responseMsg), 0, sizeof(responseMsg));
+    ERR_CHK(safec_rc);
     
     if (NULL == infoParam)
     {
@@ -133,7 +136,14 @@ static IARM_Result_t _GetTRMDiagInfo(void *arg)
             if(ret)
             {
                 infoParam->bufLen  = length;
-                memcpy(infoParam->buf,responseMsg,length);
+                safec_rc = memcpy_s(infoParam->buf, sizeof(infoParam->buf), responseMsg, length);
+                if(safec_rc != EOK)
+                {
+                  ERR_CHK(safec_rc);
+                  infoParam->retCode = TRMMgr_ERR_FAILED;
+                  infoParam->bufLen  = 0;
+                }
+
                 DIAG_TRACE(("%s() Length of TRM Message is %d \r\n",__FUNCTION__,length));
             }
             else
@@ -152,7 +162,15 @@ static IARM_Result_t _GetTRMDiagInfo(void *arg)
             if(ret)
             {
                 infoParam->bufLen  = length;
-                memcpy(infoParam->buf,responseMsg,length);
+                safec_rc = memcpy_s(infoParam->buf, sizeof(infoParam->buf), responseMsg, length);
+                if(safec_rc != EOK)
+                {
+                  ERR_CHK(safec_rc);
+                  infoParam->retCode = TRMMgr_ERR_FAILED;
+                  infoParam->bufLen  = 0;
+                }
+
+
                 DIAG_TRACE(("%s() Length of TRM Message is %d \r\n",__FUNCTION__,length));
             }
             else
@@ -187,7 +205,15 @@ static IARM_Result_t _GetTRMDiagInfo(void *arg)
             if(ret)
             {
                 infoParam->bufLen  = length;
-                memcpy(infoParam->buf,responseMsg,length);
+                safec_rc = memcpy_s(infoParam->buf, sizeof(infoParam->buf), responseMsg, length);
+                if(safec_rc != EOK)
+                {
+                  ERR_CHK(safec_rc);
+                  infoParam->retCode = TRMMgr_ERR_FAILED;
+                  infoParam->bufLen  = 0;
+                }
+
+
                 DIAG_TRACE(("%s() Length of TRM Message is %d \r\n",__FUNCTION__,length));
             }
             else
@@ -206,7 +232,15 @@ static IARM_Result_t _GetTRMDiagInfo(void *arg)
             if(ret)
             {
                 infoParam->bufLen  = length;
-                memcpy(infoParam->buf,responseMsg,length);
+                safec_rc = memcpy_s(infoParam->buf, sizeof(infoParam->buf), responseMsg, length);
+                if(safec_rc != EOK)
+                {
+                  ERR_CHK(safec_rc);
+                  infoParam->retCode = TRMMgr_ERR_FAILED;
+                  infoParam->bufLen  = 0;
+                }
+
+
                 DIAG_TRACE(("%s() Length of TRM Message is %d \r\n",__FUNCTION__,length));
                 
             }
@@ -227,7 +261,14 @@ static IARM_Result_t _GetTRMDiagInfo(void *arg)
             if(ret)
             {
                 infoParam->bufLen  = length;
-                memcpy(infoParam->buf,responseMsg,length);
+                safec_rc = memcpy_s(infoParam->buf, sizeof(infoParam->buf), responseMsg, length);
+                if(safec_rc != EOK)
+                {
+                  ERR_CHK(safec_rc);
+                  infoParam->retCode = TRMMgr_ERR_FAILED;
+                  infoParam->bufLen  = 0;
+                }
+
                 DIAG_TRACE(("%s() Length of TRM Message is %d \r\n",__FUNCTION__,length));
             }
             else
@@ -261,6 +302,7 @@ int main(int argc, char *argv[])
 {
 
     uint32_t length = 0;
+    errno_t safec_rc = -1;
 
 	 /* Line Buffering*/
     setvbuf(stdout, NULL, _IOLBF, 0);
@@ -281,7 +323,9 @@ int main(int argc, char *argv[])
     TRMMgrHelperImpl::getInstance().init();
 
     /* Get TRM Version */
-    memset(responseMsg,0,sizeof(responseMsg));
+    safec_rc = memset_s(responseMsg, sizeof(responseMsg), 0 , sizeof(responseMsg));
+    ERR_CHK(safec_rc);
+
    bool ret = TRMMgrHelperImpl::getInstance().getVersion(&length,&responseMsg[0]);
             
 	while(1)
