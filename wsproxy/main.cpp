@@ -464,6 +464,10 @@ static  QString getIPFromInterface(QString interfaceName, bool isLoopback)
     {
         foreach (const QNetworkAddressEntry &address, netInterface.addressEntries())
         {
+            if(address.ip().protocol() != QAbstractSocket::IPv4Protocol)
+            {
+                continue;
+            }
             if (address.ip().isLoopback() == isLoopback)
             {
                 interfaceIp = address.ip().toString();
@@ -533,6 +537,7 @@ int main(int argc, char *argv[])
 
     if (boundIPs.empty())
     {
+        
         //Adding local host ip to the list
         QString localHostIp = getIPFromInterface(localHost, true);
         if(!localHostIp.isNull())
@@ -545,11 +550,24 @@ int main(int argc, char *argv[])
         QString mocaInterfaceName = deviceSetting.value( mocaIntTagName).toString();
         if(!mocaInterfaceName.isNull())
         {
-            QString mocaIp = getIPFromInterface(mocaInterfaceName, false);
-            if(!mocaIp.isNull())
+            int retryCount = 10;
+            QString mocaIp;
+            do
             {
-                boundIPs.append(mocaIp);
-            }
+                QString mocaIp = getIPFromInterface(mocaInterfaceName, false);
+                if(!mocaIp.isNull())
+                {
+                    boundIPs.append(mocaIp);
+                    qDebug()<<"TRM Moca ip present ...continue ";
+                    break;
+                }
+                else
+                {
+                    qDebug()<<"TRM Moca ip not present retry after 5 sleep";
+                    sleep(5);
+                }
+                retryCount--;
+            }while( retryCount);
         }
         else
         {
