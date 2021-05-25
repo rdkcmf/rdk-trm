@@ -206,7 +206,7 @@ WebSocketProxy::WebSocketProxy(const QStringList &boundIPs, quint16 port, QObjec
 			        keyFile.close();
 			        QSslConfiguration sslConfiguration;
 
-			        sslConfiguration.setPeerVerifyMode(QSslSocket::VerifyPeer);
+			        sslConfiguration.setPeerVerifyMode(QSslSocket::QueryPeer);
 			        sslConfiguration.setLocalCertificate(certificate);
 			        sslConfiguration.setPrivateKey(sslKey);
 			        sslConfiguration.setProtocol(QSsl::TlsV1_2);
