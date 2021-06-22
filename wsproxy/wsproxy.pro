@@ -40,12 +40,15 @@ equals(USE_DELIA_GW, yes){
 QT += websockets
 INCLUDEPATH += ../../../../opensource/src/qt/build/qtbase/mkspecs/devices/linux-platfrom-rdk-g++ 
 INCLUDEPATH += ../../rdklogger/include
+INCLUDEPATH += =/usr/include/wdmp-c
+INCLUDEPATH += =/usr/include
 
 !contains(DEFINES, USE_TRM_YOCTO_BUILD) {
 LIBS += -L../../rdklogger/build/lib/
 LIBS += -L${RDK_FSROOT_PATH}/usr/lib
 }
 LIBS += -lrdkloggers -llog4c
+LIBS += -lrfcapi
 
 contains(DEFINES, USE_SAFEC_API) {
 CONFIG += link_pkgconfig

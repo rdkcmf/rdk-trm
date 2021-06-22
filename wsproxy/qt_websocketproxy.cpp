@@ -45,6 +45,7 @@
 #include <QSslCipher>
 #include <QSettings>
 #include "safec_lib.h"
+#include "rfcapi.h"
 
 const char* trmPropertiesPath ="/etc/trmProxySetup.properties";
 const char* caKeyTagName = "CA_CHAIN_CERTIFICATE";
@@ -65,26 +66,28 @@ static WebSocketProxy *m_proxy = NULL;
 
 QT_USE_NAMESPACE
 
-PingPongTask::PingPongTask(QWebSocket &wssocket) 
-: wssocket(wssocket), stopped(false)
+PingPongTask::PingPongTask(QWebSocket &wssocket)
+    : wssocket(wssocket), stopped(false)
 {
-    __TIMESTAMP(); std::cout << "Ping-Pong created for socket " << (void *)&wssocket << std::endl; 
+    __TIMESTAMP();
+    std::cout << "Ping-Pong created for socket " << (void *)&wssocket << std::endl;
     connect(&timer, SIGNAL(timeout()), this, SLOT(onTimeout()));
     connect(&wssocket, SIGNAL(pong(quint64, QByteArray)), this, SLOT(onPong(quint64, QByteArray)));
     retry = 0;
 }
 
-PingPongTask::~PingPongTask(void) 
+PingPongTask::~PingPongTask(void)
 {
     if (!stopped) {
-        __TIMESTAMP(); std::cout << " Assert: PING-PONG not stopped before deleting\r\n";
+        __TIMESTAMP();
+        std::cout << " Assert: PING-PONG not stopped before deleting\r\n";
     }
 }
 
-void PingPongTask::start(void) 
+void PingPongTask::start(void)
 {
     if (!stopped) {
-        //__TIMESTAMP(); std::cout << "Ping-Pong started for socket " << (void *)&wssocket << std::endl; 
+        //__TIMESTAMP(); std::cout << "Ping-Pong started for socket " << (void *)&wssocket << std::endl;
         wssocket.ping();
         timer.setInterval(5000);
         timer.setSingleShot(true);
@@ -92,28 +95,31 @@ void PingPongTask::start(void)
     }
 }
 
-void PingPongTask::stop(void) 
+void PingPongTask::stop(void)
 {
-    __TIMESTAMP(); std::cout << "Ping-Pong stopped for socket " << (void *)&wssocket << std::endl; 
+    __TIMESTAMP();
+    std::cout << "Ping-Pong stopped for socket " << (void *)&wssocket << std::endl;
     timer.stop();
     stopped = true;
 }
 
-void PingPongTask::onTimeout(void) 
+void PingPongTask::onTimeout(void)
 {
     /* Retry on timeout, or close the connection */
-    //__TIMESTAMP(); std::cout << "Ping-Pong Timeout " << retry << "times for socket " << (void *)&wssocket << std::endl; 
+    //__TIMESTAMP(); std::cout << "Ping-Pong Timeout " << retry << "times for socket " << (void *)&wssocket << std::endl;
     retry++;
     if (retry < 3) {
         start();
     }
     else {
         if (retry < 5) {
-            __TIMESTAMP(); std::cout << "Ping-Pong Would have closed socket " << (void *)&wssocket << std::endl; 
+            __TIMESTAMP();
+            std::cout << "Ping-Pong Would have closed socket " << (void *)&wssocket << std::endl;
             start();
         }
         else {
-            __TIMESTAMP(); std::cout << "Ping-Pong Timeout closing socket " << (void *)&wssocket << std::endl; 
+            __TIMESTAMP();
+            std::cout << "Ping-Pong Timeout closing socket " << (void *)&wssocket << std::endl;
             wssocket.close();
         }
     }
@@ -123,7 +129,8 @@ void PingPongTask::onPong(quint64 elapsedTime, QByteArray)
 {
     /* reset on PONG */
     if (elapsedTime > 10000) {
-        __TIMESTAMP(); std::cout << "Ping-Pong Slow: pong received for socket " << (void *)&wssocket << std::endl; 
+        __TIMESTAMP();
+        std::cout << "Ping-Pong Slow: pong received for socket " << (void *)&wssocket << std::endl;
         std::cout << " At [" << QTime::currentTime().toString().toUtf8().data();
         std::cout << " ] PONG received epapsedTime = " << elapsedTime << std::endl;
     }
@@ -134,20 +141,20 @@ void PingPongTask::onPong(quint64 elapsedTime, QByteArray)
 /* Function to execute system command */
 static int exec_sys_command(char* cmd)
 {
-  char buff[128] = {0};
-  int len;
-  FILE *syscmd = popen(cmd, "re");
-  if(!syscmd){
-	  std::cout <<"popen failed with error code"<< syscmd <<"to execute system command: "<< cmd;
-    return -1;
-  }
-  std::cout << "Executing system command " << cmd << std::endl;
+    char buff[128];
+    FILE *syscmd = popen(cmd, "re");
+    if(!syscmd) {
+        std::cout <<"popen failed with error code"<< syscmd <<"to execute system command: "<< cmd;
+        return -1;
+    }
+    memset(buff, 0, 128);
+    std::cout << "Executing system command " << cmd << std::endl;
 
-  while(fgets(buff, sizeof(buff), syscmd) != 0){
-	  std::cout << "read syscmd buff : " << buff << std::endl;
-  }
-  pclose(syscmd);
-  return 0;
+    while(fgets(buff, sizeof(buff), syscmd) != 0) {
+        std::cout << "read syscmd buff : " << buff << std::endl;
+    }
+    pclose(syscmd);
+    return 0;
 }
 
 #define  TRM_USE_RFC 1
@@ -162,19 +169,42 @@ static bool rfc_get_trmssl_status()
         isTRMSSLEnabled = false;
     }
 #else
-	isTRMSSLEnabled = true;
+    isTRMSSLEnabled = true;
 #endif
 
     std::cout << "RFC TRMSSL feature status:"<< isTRMSSLEnabled<<std::endl;
     return isTRMSSLEnabled;
 }
 
+static bool is_RFC_mTLS_enable ( void)
+{
+    bool ret = false;
+    RFC_ParamData_t param;
+    WDMP_STATUS status = getRFCParameter((const char*)"WSPROXY", (const char*)"Device.DeviceInfo.X_RDKCENTRAL-COM_RFC.Feature.TRM.EnableMTLS", &param);
+
+    if (status == WDMP_SUCCESS) {
+        printf ("name = %s, type = %d, value = %s\n", param.name, param.type, param.value);
+
+        if (!strncmp(param.value, "true", strlen("true"))) {
+            printf ("TRM mTLS is enabled.\n");
+            ret = true;
+        }
+        else {
+            printf ("TRM mTLS is disabled.\n");
+        }
+    }
+    else {
+        printf ("getRFCParameter Failed : %s\n", getRFCErrorString(status));
+    }
+    return ret;
+}
+
 WebSocketProxy::WebSocketProxy(const QStringList &boundIPs, quint16 port, QObject *parent) :
     QObject(parent), proxyServers(), connections()
 {
 #ifdef TRM_USE_SSL
-	if(rfc_get_trmssl_status() == true)
-	{
+    if(rfc_get_trmssl_status() == true)
+    {
         //Reading TRM configuration file
         QSettings trmSetting( trmPropertiesPath, QSettings::IniFormat );
         QString caChainFile = trmSetting.value( caKeyTagName ).toString();
@@ -182,106 +212,113 @@ WebSocketProxy::WebSocketProxy(const QStringList &boundIPs, quint16 port, QObjec
         QString certFileName = trmSetting.value( publicKeyTagName  ).toString();
         if(caChainFile.isNull() || keyFileName.isNull() || certFileName.isNull()  )
         {
-		    std::cout << "Missing TRM configuration information";
+            std::cout << "Missing TRM configuration information";
         }
         else
         {
             QStringList::const_iterator it = boundIPs.constBegin();
-	        while (it != boundIPs.constEnd())
-	        {
-		        if (proxyServers.constFind(*it) == proxyServers.constEnd())
-		        {
-			        QFile certFile(certFileName);
-			        QFile keyFile(keyFileName);
-			        if(!keyFile.exists())
-			        {
-			            std::cout << "Server private key not exist. Don't start the server ";
-			            break;
-			        }
-			        certFile.open(QIODevice::ReadOnly);
-			        keyFile.open(QIODevice::ReadOnly);
-			        QSslCertificate certificate(&certFile, QSsl::Pem);
-			        QSslKey sslKey(&keyFile, QSsl::Rsa, QSsl::Pem,QSsl::PrivateKey,QByteArray(""));
-			        certFile.close();
-			        keyFile.close();
-			        QSslConfiguration sslConfiguration;
+            while (it != boundIPs.constEnd())
+            {
+                if (proxyServers.constFind(*it) == proxyServers.constEnd())
+                {
+                    QFile certFile(certFileName);
+                    QFile keyFile(keyFileName);
+                    if(!keyFile.exists())
+                    {
+                        std::cout << "Server private key not exist. Don't start the server ";
+                        break;
+                    }
+                    certFile.open(QIODevice::ReadOnly);
+                    keyFile.open(QIODevice::ReadOnly);
+                    QSslCertificate certificate(&certFile, QSsl::Pem);
+                    QSslKey sslKey(&keyFile, QSsl::Rsa, QSsl::Pem,QSsl::PrivateKey,QByteArray(""));
+                    certFile.close();
+                    keyFile.close();
+                    QSslConfiguration sslConfiguration;
 
-			        sslConfiguration.setPeerVerifyMode(QSslSocket::QueryPeer);
-			        sslConfiguration.setLocalCertificate(certificate);
-			        sslConfiguration.setPrivateKey(sslKey);
-			        sslConfiguration.setProtocol(QSsl::TlsV1_2);
-			        sslConfiguration.setPeerVerifyDepth(2);
+                    if (true == is_RFC_mTLS_enable())
+                    {
+                        std::cout << "QSslSocket peerVerifyMode is QSslSocket::VerifyPeer. " << std::endl;
+                        sslConfiguration.setPeerVerifyMode(QSslSocket::VerifyPeer);
+                    }
+                    else
+                    {
+                        std::cout << "QSslSocket peerVerifyMode is QSslSocket::QueryPeer. " << std::endl;
+                        sslConfiguration.setPeerVerifyMode(QSslSocket::QueryPeer);
+                    }
 
-			        QList<QSslCertificate> caCerts = QSslCertificate::fromPath(caChainFile);
+                    sslConfiguration.setLocalCertificate(certificate);
+                    sslConfiguration.setPrivateKey(sslKey);
+                    sslConfiguration.setProtocol(QSsl::TlsV1_2);
+                    sslConfiguration.setPeerVerifyDepth(2);
 
-			        sslConfiguration.setCaCertificates(caCerts);
-			        QWebSocketServer *proxyServer = new QWebSocketServer(QString("TRM SecureMode WebsocketServer IP: ") + *it , QWebSocketServer::SecureMode, this);
+                    QList<QSslCertificate> caCerts = QSslCertificate::fromPath(caChainFile);
 
-			        proxyServer->setSslConfiguration(sslConfiguration);
+                    sslConfiguration.setCaCertificates(caCerts);
+                    QWebSocketServer *proxyServer = new QWebSocketServer(QString("TRM SecureMode WebsocketServer IP: ") + *it , QWebSocketServer::SecureMode, this);
 
-			    	std::cout << "TRM WebsocketProxy starting server on ip: " <<(*it).toUtf8().data()
-						<<" SecureMode: "<<proxyServer->secureMode()<< std::endl;
-			        if (proxyServer->listen(QHostAddress(*it), port))
-			        {
-				        connect(proxyServer, SIGNAL(newConnection()), this,
-			                             SLOT(onNewConnection()));
-	         			connect(proxyServer,&QWebSocketServer::sslErrors ,this,
-						&WebSocketProxy::onSslErrors);
-				        connect(proxyServer, &QWebSocketServer::acceptError, this,
-						&WebSocketProxy::onAcceptError);
-                                        connect(proxyServer, &QWebSocketServer::peerVerifyError, this,
-                                                &WebSocketProxy::onPeerVerifyError);
-				        proxyServers[*it] = proxyServer;
-			        }
-			        else
-				    {
-					    std::cout << "TRM WebsocketProxy Failed to listen" << std::endl;
-			        }
-		        }
-		        else
-		        {
-			    __TIMESTAMP();std::cout << "TRM WebsocketProxy already listen on "
-			        << (*it).toUtf8().data() << ":" << port << std::endl;
-		        }
+                    proxyServer->setSslConfiguration(sslConfiguration);
 
-		        ++it;
-	        }
-	        char cmd[256];
-		errno_t safec_rc = -1;
-		safec_rc = sprintf_s(cmd,sizeof(cmd), "rm %s", keyFileName.toLatin1().data());
-		if(safec_rc < EOK) {
-			ERR_CHK(safec_rc);
-		}
-	        exec_sys_command(cmd);
+                    std::cout << "TRM WebsocketProxy starting server on ip: " <<(*it).toUtf8().data()
+                              <<" SecureMode: "<<proxyServer->secureMode()<< std::endl;
+                    if (proxyServer->listen(QHostAddress(*it), port))
+                    {
+                        connect(proxyServer, SIGNAL(newConnection()), this,
+                                SLOT(onNewConnection()));
+                        connect(proxyServer,&QWebSocketServer::sslErrors ,this,
+                                &WebSocketProxy::onSslErrors);
+                        connect(proxyServer, &QWebSocketServer::acceptError, this,
+                                &WebSocketProxy::onAcceptError);
+                        connect(proxyServer, &QWebSocketServer::peerVerifyError, this,
+                                &WebSocketProxy::onPeerVerifyError);
+                        proxyServers[*it] = proxyServer;
+                    }
+                    else
+                    {
+                        std::cout << "TRM WebsocketProxy Failed to listen" << std::endl;
+                    }
+                }
+                else
+                {
+                    __TIMESTAMP();
+                    std::cout << "TRM WebsocketProxy already listen on "
+                              << (*it).toUtf8().data() << ":" << port << std::endl;
+                }
+
+                ++it;
+            }
+            char cmd[256];
+            sprintf(cmd, "%s %s", "rm", keyFileName.toLatin1().data());
+            exec_sys_command(cmd);
         }
-	}
+    }
 #endif
-	///non secure connection on port 9988
-	port--;
+    ///non secure connection on port 9988
+    port--;
 
-	// Temp Code added to support non secure TRM connection. This should be removed once all XI device updated
-	// with secure connection capability.
-	QStringList::const_iterator itr = boundIPs.constBegin();
-	while (itr != boundIPs.constEnd()) {
-			QWebSocketServer *proxyServer = new QWebSocketServer(
-					QString("TRM NonSecureMode WebsocketServer IP: ") + *itr,
-					QWebSocketServer::NonSecureMode, this);
-			std::cout << "TRM WebsocketProxy starting server on ip: " <<(*itr).toUtf8().data()
-					<<" SecureMode: "<<proxyServer->secureMode()<< std::endl;
-			if (proxyServer->listen(QHostAddress(*itr), port)) {
-				connect(proxyServer, SIGNAL(newConnection()), this,
-						SLOT(onNewConnection()));
-				proxyServers[*itr] = proxyServer;
-			}
-			else
-			{
-				std::cout << "TRM WebsocketProxy Failed to listen" << std::endl;
-			}
+    // Temp Code added to support non secure TRM connection. This should be removed once all XI device updated
+    // with secure connection capability.
+    QStringList::const_iterator itr = boundIPs.constBegin();
+    while (itr != boundIPs.constEnd()) {
+        QWebSocketServer *proxyServer = new QWebSocketServer(
+            QString("TRM NonSecureMode WebsocketServer IP: ") + *itr,
+            QWebSocketServer::NonSecureMode, this);
+        std::cout << "TRM WebsocketProxy starting server on ip: " <<(*itr).toUtf8().data()
+                  <<" SecureMode: "<<proxyServer->secureMode()<< std::endl;
+        if (proxyServer->listen(QHostAddress(*itr), port)) {
+            connect(proxyServer, SIGNAL(newConnection()), this,
+                    SLOT(onNewConnection()));
+            proxyServers[*itr] = proxyServer;
+        }
+        else
+        {
+            std::cout << "TRM WebsocketProxy Failed to listen" << std::endl;
+        }
 
-		++itr;
-	}
+        ++itr;
+    }
 
-	m_proxy = this;
+    m_proxy = this;
 }
 
 #ifdef TRM_USE_SSL
@@ -305,37 +342,41 @@ void WebSocketProxy::onNewConnection()
 
     {
 
-    	static const char *has_livestream_client_flag_filename ="/tmp/mnt/diska3/persistent/.has_livestream_client";
+        static const char *has_livestream_client_flag_filename ="/tmp/mnt/diska3/persistent/.has_livestream_client";
         struct stat st;
 
         int ret = ::lstat(has_livestream_client_flag_filename, &st);
 #define USE_DELIA_GATEWAY
 #ifndef USE_DELIA_GATEWAY
         if (ret >= 0) {
-        	/* Already has flag set */
+            /* Already has flag set */
         }
         else {
-        	int fd = ::open(has_livestream_client_flag_filename, O_WRONLY|O_CREAT, 0666);
-        	if (fd >= 0) {
-        		/* Reboot */
-        		__TIMESTAMP(); std::cout << "Rebooting STB on the initial xi3 connection \r\n" << std::endl;
-        		close(fd);
-        		::sync();
-        		::system( "sh /rebootNow.sh -s websocketproxyinit" );
-        		return;
-        	}
+            int fd = ::open(has_livestream_client_flag_filename, O_WRONLY|O_CREAT, 0666);
+            if (fd >= 0) {
+                /* Reboot */
+                __TIMESTAMP();
+                std::cout << "Rebooting STB on the initial xi3 connection \r\n" << std::endl;
+                close(fd);
+                ::sync();
+                ::system( "sh /rebootNow.sh -s websocketproxyinit" );
+                return;
+            }
         }
 #endif //USE_DELIA_GATEWAY
 
     }
 
     QWebSocketServer *proxyServer = qobject_cast<QWebSocketServer *>(sender());
-    __TIMESTAMP(); std::cout << "TRM WebsocketProxy connection from server " << (void *)proxyServer << " of name:" << proxyServer->serverName().toUtf8().data() << std::endl;
+    __TIMESTAMP();
+    std::cout << "TRM WebsocketProxy connection from server " << (void *)proxyServer << " of name:" << proxyServer->serverName().toUtf8().data() << std::endl;
 
     QWebSocket *wssocket = proxyServer->nextPendingConnection();
     websocket_connect_callback((void *)wssocket);
-    __TIMESTAMP(); std::cout << "TRM WebsocketProxy peerAddress: "  << qPrintable(wssocket->peerAddress().toString()) << " Port: "<< wssocket->peerPort();
-    __TIMESTAMP(); std::cout << "TRM WebsocketProxy accept connection " << (void *)wssocket << std::endl;
+    __TIMESTAMP();
+    std::cout << "TRM WebsocketProxy peerAddress: "  << qPrintable(wssocket->peerAddress().toString()) << " Port: "<< wssocket->peerPort();
+    __TIMESTAMP();
+    std::cout << "TRM WebsocketProxy accept connection " << (void *)wssocket << std::endl;
 
     // The QtWebSocket version we use doesn't support connected() signal. Instead the
     // newConnection() signal already indicates the completion of ws handshake
@@ -365,19 +406,22 @@ void WebSocketProxy::onNewConnection()
 
 void WebSocketProxy::onWebsocketConnect(void)
 {
-    __TIMESTAMP(); std::cout << "TRM WebsocketProxy onWebsocketConnect" << std::endl;
+    __TIMESTAMP();
+    std::cout << "TRM WebsocketProxy onWebsocketConnect" << std::endl;
 }
 
 void WebSocketProxy::onWebsocketBinaryMessageReceived(QByteArray byteArray)
 {
-    __TIMESTAMP(); std::cout << "TRM WebsocketProxy onWebsocketBinaryMessageReceived" << std::endl;
+    __TIMESTAMP();
+    std::cout << "TRM WebsocketProxy onWebsocketBinaryMessageReceived" << std::endl;
     QWebSocket *wssocket = qobject_cast<QWebSocket *>(sender());
     websocket_data_callback((void *)wssocket, 0, byteArray.data(), byteArray.size());
 }
 
 void WebSocketProxy::onWebsocketTextMessageReceived(QString message)
 {
-    __TIMESTAMP(); std::cout << "TRM WebsocketProxy onWebsocketTextMessageReceived" << std::endl;
+    __TIMESTAMP();
+    std::cout << "TRM WebsocketProxy onWebsocketTextMessageReceived" << std::endl;
     QWebSocket *wssocket = qobject_cast<QWebSocket *>(sender());
     websocket_data_callback((void *)wssocket, 0, message.toUtf8().data(), message.size());
 }
@@ -389,17 +433,18 @@ void WebSocketProxy::onWebsocketBytesWritten(qint64)
 void WebSocketProxy::onWebsocketDisconnected(void)
 {
     QWebSocket *wssocket = qobject_cast<QWebSocket *>(sender());
-    __TIMESTAMP(); std::cout << "TRM WebsocketProxy onWebsocketDisconnected " << (void *)wssocket << std::endl;
+    __TIMESTAMP();
+    std::cout << "TRM WebsocketProxy onWebsocketDisconnected " << (void *)wssocket << std::endl;
     if (wssocket && connections.contains(wssocket)) {
         //wssocket->close();
-    	wssocket->deleteLater();
+        wssocket->deleteLater();
 
         connections.removeAll(wssocket);
-    	websocket_disconnect_callback((void *)wssocket);
+        websocket_disconnect_callback((void *)wssocket);
         /* Delete pingpong before deleting socket */
         ((pingPongTasks.find(wssocket)).value())->stop();
         ((pingPongTasks.find(wssocket)).value())->deleteLater();
-    	pingPongTasks.remove(wssocket);
+        pingPongTasks.remove(wssocket);
     }
 }
 
@@ -411,11 +456,12 @@ void WebSocketProxy::onWebsocketStateChanged(QAbstractSocket::SocketState state)
         "ConnectingState",
         "ConnectedState",
         "BoundState",
-        "ListeningState", 
+        "ListeningState",
         "ClosingState",
     };
     QWebSocket *wssocket = qobject_cast<QWebSocket *>(sender());
-    __TIMESTAMP(); std::cout << "TRM WebsocketProxy onWebsocketStateChanged " << (void *)wssocket << " New State =" << states_name[state] << std::endl;
+    __TIMESTAMP();
+    std::cout << "TRM WebsocketProxy onWebsocketStateChanged " << (void *)wssocket << " New State =" << states_name[state] << std::endl;
 }
 
 void WebSocketProxy::onWebSocketAboutClose(void)
@@ -424,11 +470,12 @@ void WebSocketProxy::onWebSocketAboutClose(void)
 
 void WebSocketProxy::onWebsocketError(QAbstractSocket::SocketError error)
 {
-    __TIMESTAMP(); std::cout << "TRM WebsocketProxy onWebsocketError = " << error << std::endl;
+    __TIMESTAMP();
+    std::cout << "TRM WebsocketProxy onWebsocketError = " << error << std::endl;
     QWebSocket *wssocket = qobject_cast<QWebSocket *>(sender());
     if (wssocket) {
-        // cannot do socket close here. do so after disconnect 
-    	// wssocket->close();
+        // cannot do socket close here. do so after disconnect
+        // wssocket->close();
     }
 }
 
@@ -440,7 +487,7 @@ void WebSocketProxy::onWebsocketHasDataToWrite(void *conn, void *data)
 
     QWebSocket *wssocket = (QWebSocket *)conn;
     QByteArray *byteArray= (QByteArray *)data;
-    if (connections.contains(wssocket)) { 
+    if (connections.contains(wssocket)) {
         wssocket->sendTextMessage(QString(byteArray->constData()));
     }
     delete byteArray;
@@ -452,7 +499,8 @@ void WebSocketProxy::onRemoveConnection(void *conn)
     /* This is thread safe as the caller of mg_websocket_write() already ensure
      * that the connection is still valid.
      */
-    __TIMESTAMP(); std::cout << "onRemoveConnection" << std::endl;
+    __TIMESTAMP();
+    std::cout << "onRemoveConnection" << std::endl;
 
     QWebSocket *wssocket = (QWebSocket *)conn;
     if (connections.contains(wssocket)) {
@@ -464,18 +512,20 @@ void WebSocketProxy::onRemoveConnection(void *conn)
 int mg_websocket_write(void * conn, const char *data, size_t data_len)
 {
     QWebSocket *wssocket = (QWebSocket *)(conn);
-    //Want to NULL terminate the message 
+    //Want to NULL terminate the message
     QByteArray *byteArray = new QByteArray(data, data_len);
     byteArray->append('\0');
-    QMetaObject::invokeMethod(m_proxy, "onWebsocketHasDataToWrite", Qt::QueuedConnection, Q_ARG(void *, wssocket), Q_ARG(void *, byteArray)); 
+    QMetaObject::invokeMethod(m_proxy, "onWebsocketHasDataToWrite", Qt::QueuedConnection, Q_ARG(void *, wssocket), Q_ARG(void *, byteArray));
 
     return data_len;
 }
 
 int mg_websocket_close(void * conn)
 {
-    __TIMESTAMP(); std::cout << "mg_websocket_close" << std::endl;
-    __TIMESTAMP(); printf("[%s] THREAD SELF is %p\r\n", __FUNCTION__, (void *)pthread_self());
+    __TIMESTAMP();
+    std::cout << "mg_websocket_close" << std::endl;
+    __TIMESTAMP();
+    printf("[%s] THREAD SELF is %p\r\n", __FUNCTION__, (void *)pthread_self());
 
     QWebSocket *wssocket = (QWebSocket *)(conn);
     //Want to NULL terminate the message
