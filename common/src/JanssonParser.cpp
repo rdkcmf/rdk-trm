@@ -2033,7 +2033,7 @@ void JsonDecode(int handle, CancelLive & message)
 }
 
 /*
- * {"result": "OK", "data": {"deviceId": "P0117505117", "authToken":"AHuptmh1TGoykHen"}}
+ * {"result": "OK", "data": {"deviceId": "P1234567890", "authToken":"abCDefGhijK"}}
  */
 int JsonDecode(const std::vector<uint8_t> &in, GenerateAuthTokenResponse &response)
 {
