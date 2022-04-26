@@ -46,6 +46,8 @@
 #include <QtNetwork/QSslError>
 #endif
 
+#include "tcpOpensslProxyServer.h"
+
 class QWebSocketServer;
 class QWebSocket;
 class PingPongTask;
@@ -56,6 +58,10 @@ class WebSocketProxy : public QObject
     Q_OBJECT
 public:
     explicit WebSocketProxy(const QStringList &boundIPs, quint16 port, QObject *parent = Q_NULLPTR);
+
+    int onWebsocketHasDataToWriteSSL(int clientId, char* data, int len);
+    void onRemoveAllOpenSslConnections();
+    std::unordered_map <int, PingPongTask*>sslProxyPingPongTasks;
 
 Q_SIGNALS:
 
@@ -78,8 +84,18 @@ private Q_SLOTS:
     void onWebsocketHasDataToWrite(void *, void*);
     void onRemoveConnection(void *);
 
+    void onNewConnectionSSl(int clientId, tcpOpensslProxyServer *ss);
+    void onWebsocketConnectSSL(int clientId, QString msg);
+    void onSslErrorsSSL(QString err);
+    void onAcceptErrorSSL(QString err);
+    void onPeerVerifyErrorSSL(QString err);
+    void onWebsocketDisconnectedSSL(int clientId);
+    void onWebsocketErrorSSL(QString err);
+
 private:
     QMap<QString, QWebSocketServer *>proxyServers;
+    QMap<QString, tcpOpensslProxyServer *>sslProxyServers;
+    std::unordered_map <int, tcpOpensslProxyServer *>sslProxyMap;
     QList<QWebSocket *> connections; 
     QMap<QWebSocket *, PingPongTask *> pingPongTasks;
 };
@@ -88,7 +104,8 @@ class PingPongTask : public QObject {
     Q_OBJECT
 public:
     PingPongTask();
-    PingPongTask(QWebSocket &wssocket);
+    PingPongTask(QWebSocket* wssocket);
+    PingPongTask(tcpOpensslProxyServer *sslProxyServer, int clientId);
     virtual ~PingPongTask(void);
     void start(void);
     void stop(void);
@@ -98,10 +115,12 @@ public Q_SLOTS:
     void onPong(quint64 elapsedTime, QByteArray);
 
 private:
-    QWebSocket &wssocket;
+    QWebSocket* wssocket;
     QTimer timer;
     int retry;
     bool stopped;
+    int m_clientId;
+    tcpOpensslProxyServer *m_sslProxyServer;
 };
 
 #define _TRMPRX_OUT_ stdout

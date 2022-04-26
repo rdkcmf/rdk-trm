@@ -65,6 +65,10 @@ QT -= widget
 
 # Input
 HEADERS += qt_websocketproxy.h \
+           tcpOpensslProxyServer.h
 
 SOURCES += qt_websocketproxy.cpp \
+           tcpOpensslProxyServer.cpp \
            main.cpp
+
+LIBS += -lcrypto -lssl -lpthread

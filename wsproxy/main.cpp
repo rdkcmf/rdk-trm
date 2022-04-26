@@ -163,6 +163,8 @@ static void remove_all_connections(void)
     }
 
     connections.clear();
+    extern int mg_websocket_close_all_ssl();
+    mg_websocket_close_all_ssl();
 
 }
 
@@ -289,19 +291,11 @@ int log_message_callback(void */*conn*/, const char *message)
     return 0;
 }
 
-int websocket_data_callback(void *conn, int flags, char *trm_data, size_t trm_data_length)
-{
+int websocket_data_callback_with_clientId(int connection_id, int flags, char *trm_data, size_t trm_data_length){
     int keep_connection = 1;
-    flags = flags;
-    __TIMESTAMP();
     printf("[%s][%.*s]\r\n", __func__, trm_data_length, trm_data);
     /* Packaget into TRM message. Prexif transport protocol */
     size_t payload_length = trm_data_length;
-    int connection_id = -1;
-    {   AutoLock();
-        connection_id =  conn_to_id(conn);
-    }
-
     if (connection_id >= 0 && trm_data_length >= 0) {
         /* First prepend header */
         unsigned char *buf = (unsigned char *) malloc(payload_length + header_length);
@@ -350,10 +344,20 @@ int websocket_data_callback(void *conn, int flags, char *trm_data, size_t trm_da
     }
     else {
         __TIMESTAMP();
-        printf("invalid connection %p\r\n", conn);
+        printf("invalid connection %d\r\n", connection_id);
     }
 
     return keep_connection;
+}
+int websocket_data_callback(void *conn, int flags, char *trm_data, size_t trm_data_length)
+{
+    flags = flags;
+    __TIMESTAMP();
+    int connection_id = -1;
+    {   AutoLock();
+        connection_id =  conn_to_id(conn);
+    }
+    return websocket_data_callback_with_clientId (connection_id, flags, trm_data, trm_data_length);
 }
 
 static void * TRM_response_listener(void * /*args*/)
@@ -451,7 +455,10 @@ static void * TRM_response_listener(void * /*args*/)
 #endif
                     }
                     else {
-                        //discard the buf.
+                        // check id it is openssl tcp connection if so handle it or discard the buf.
+			extern int mg_websocket_write_ssl(int clientId, char *data, int data_len);
+			int write_ws_count = mg_websocket_write_ssl (connection_id, buf, read_trm_count);
+                        write_ws_count = write_ws_count;
                     }
                 }
                 else {

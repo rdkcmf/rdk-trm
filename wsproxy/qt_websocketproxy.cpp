@@ -47,13 +47,23 @@
 #include "safec_lib.h"
 #include "rfcapi.h"
 
+#define DYNAMIC_PASSCODE_UTILITY "/usr/bin/rdkssacli"
+#define STATIC_PASSCODE_UTILITY "/usr/bin/GetConfigFile"
+#define DYNAMIC_PASSCODE_ARG   "\"{STOR=GET,SRC=kquhqtoczcbx,DST=/dev/stdout}\""
+#define STATIC_PASSCODE_ARG_FILE "/tmp/.cfgStaticxpki"
+
+
 const char* trmPropertiesPath ="/etc/trmProxySetup.properties";
 const char* caKeyTagName = "CA_CHAIN_CERTIFICATE";
 const char* privateKeyTagName = "CA_SERVER_PRIVATE_KEY";
 const char* publicKeyTagName = "CA_SERVER_PUBLIC_CERTIFICATE";
+const char* xpkiDynamicCertificate = "CA_SERVER_XPKI_DYNAMIC_CERTIFICATE";
+const char* xpkiStaticCertificate = "CA_SERVER_XPKI_STATIC_CERTIFICATE";
 
 
 #include "qt_websocketproxy.h"
+
+#include "tcpOpensslProxyServer.h"
 extern int  begin_request_callback(void *conn);
 extern void end_request_callback(void *conn, int reply_status_code);
 extern int  websocket_connect_callback(void *conn);
@@ -61,18 +71,34 @@ extern int  websocket_disconnect_callback(void *conn);
 extern void websocket_ready_callback(void *conn) ;
 extern int  log_message_callback(const void *conn, const char *message) ;
 extern int  websocket_data_callback(void *conn, int flags, char *trm_data, size_t trm_data_length) ;
+extern int  websocket_data_callback_with_clientId(int connection_id, int flags, char *trm_data, size_t trm_data_length);
+static void onWebsocketMessageReceivedSSL(int clientId, char* message, size_t len);
+static void onPongSSL(int clientId, long long unsigned int ticks, QByteArray &qmsg);
 
 static WebSocketProxy *m_proxy = NULL;
 
 QT_USE_NAMESPACE
 
-PingPongTask::PingPongTask(QWebSocket &wssocket)
+PingPongTask::PingPongTask(QWebSocket* wssocket)
     : wssocket(wssocket), stopped(false)
 {
+    m_clientId = -1;
+    m_sslProxyServer = NULL;
     __TIMESTAMP();
-    std::cout << "Ping-Pong created for socket " << (void *)&wssocket << std::endl;
+    std::cout << "Ping-Pong created for socket " << (void *)wssocket << std::endl;
     connect(&timer, SIGNAL(timeout()), this, SLOT(onTimeout()));
-    connect(&wssocket, SIGNAL(pong(quint64, QByteArray)), this, SLOT(onPong(quint64, QByteArray)));
+    connect(wssocket, SIGNAL(pong(quint64, QByteArray)), this, SLOT(onPong(quint64, QByteArray)));
+    retry = 0;
+}
+
+PingPongTask::PingPongTask(tcpOpensslProxyServer *sslProxyServer, int clientId)
+    : m_sslProxyServer(sslProxyServer), m_clientId(clientId), stopped(false)
+{
+    wssocket = NULL;
+    __TIMESTAMP();
+    std::cout << "Ping-Pong created for socket " << (void *)wssocket << " m_sslProxyServer "<< m_sslProxyServer <<std::endl;
+    connect(&timer, SIGNAL(timeout()), this, SLOT(onTimeout()));
+    //On pong signal handle is implemented during new connection
     retry = 0;
 }
 
@@ -87,8 +113,13 @@ PingPongTask::~PingPongTask(void)
 void PingPongTask::start(void)
 {
     if (!stopped) {
-        //__TIMESTAMP(); std::cout << "Ping-Pong started for socket " << (void *)&wssocket << std::endl;
-        wssocket.ping();
+        //__TIMESTAMP(); std::cout << "Ping-Pong started for socket " << (void *)&wssocket << " m_sslProxyServer "<< m_sslProxyServer << " m_clientId " << m_clientId <<std::endl;
+        if (NULL != wssocket) {
+            wssocket->ping();
+        }
+        if (NULL != m_sslProxyServer) {
+            m_sslProxyServer->ping (m_clientId);
+        }
         timer.setInterval(5000);
         timer.setSingleShot(true);
         timer.start();
@@ -98,7 +129,7 @@ void PingPongTask::start(void)
 void PingPongTask::stop(void)
 {
     __TIMESTAMP();
-    std::cout << "Ping-Pong stopped for socket " << (void *)&wssocket << std::endl;
+    std::cout << "Ping-Pong stopped for socket " << (void *)wssocket << " m_sslProxyServer "<< m_sslProxyServer <<std::endl;
     timer.stop();
     stopped = true;
 }
@@ -114,13 +145,18 @@ void PingPongTask::onTimeout(void)
     else {
         if (retry < 5) {
             __TIMESTAMP();
-            std::cout << "Ping-Pong Would have closed socket " << (void *)&wssocket << std::endl;
+            std::cout << "Ping-Pong Would have closed socket " << (void *)wssocket << " m_sslProxyServer "<< m_sslProxyServer <<std::endl;
             start();
         }
         else {
             __TIMESTAMP();
-            std::cout << "Ping-Pong Timeout closing socket " << (void *)&wssocket << std::endl;
-            wssocket.close();
+            std::cout << "Ping-Pong Timeout closing socket " << (void *)wssocket << " m_sslProxyServer "<< m_sslProxyServer << " m_clientId " << m_clientId << std::endl;
+	    if (NULL != wssocket) {
+                wssocket->close();
+	    }
+            if (NULL != m_sslProxyServer) {
+                m_sslProxyServer->closeClient (m_clientId);
+            }
         }
     }
 }
@@ -130,7 +166,7 @@ void PingPongTask::onPong(quint64 elapsedTime, QByteArray)
     /* reset on PONG */
     if (elapsedTime > 10000) {
         __TIMESTAMP();
-        std::cout << "Ping-Pong Slow: pong received for socket " << (void *)&wssocket << std::endl;
+        std::cout << "Ping-Pong Slow: pong received for socket " << (void *)wssocket << " m_sslProxyServer "<< m_sslProxyServer <<std::endl;
         std::cout << " At [" << QTime::currentTime().toString().toUtf8().data();
         std::cout << " ] PONG received epapsedTime = " << elapsedTime << std::endl;
     }
@@ -176,27 +212,167 @@ static bool rfc_get_trmssl_status()
     return isTRMSSLEnabled;
 }
 
-static bool is_RFC_mTLS_enable ( void)
+typedef enum {
+    RFC_PARM_mTLS = 0,
+    RFC_PARM_qtPort,
+}TRM_RFC_PARAM_TYPE;
+
+static bool is_TRM_RFC_param_enable (TRM_RFC_PARAM_TYPE type)
 {
     bool ret = false;
     RFC_ParamData_t param;
-    WDMP_STATUS status = getRFCParameter((const char*)"WSPROXY", (const char*)"Device.DeviceInfo.X_RDKCENTRAL-COM_RFC.Feature.TRM.EnableMTLS", &param);
-
+    WDMP_STATUS status = WDMP_ERR_INVALID_PARAMETER_NAME;
+    std::string parmName = std::string ("invalid");
+    switch (type) {
+        case RFC_PARM_mTLS:
+            status = getRFCParameter((const char*)"WSPROXY", (const char*)"Device.DeviceInfo.X_RDKCENTRAL-COM_RFC.Feature.TRM.EnableMTLS", &param);
+            parmName = std::string ("mTLS");
+            break;
+        case RFC_PARM_qtPort:
+            status = getRFCParameter((const char*)"WSPROXY", (const char*)"Device.DeviceInfo.X_RDKCENTRAL-COM_RFC.Feature.TRMQtSecurePort.Enable", &param);
+            parmName = std::string ("qtPort");
+            break;
+    }
     if (status == WDMP_SUCCESS) {
         printf ("name = %s, type = %d, value = %s\n", param.name, param.type, param.value);
 
         if (!strncmp(param.value, "true", strlen("true"))) {
-            printf ("TRM mTLS is enabled.\n");
+            printf ("TRM %s is enabled.\n", parmName.c_str());
             ret = true;
         }
         else {
-            printf ("TRM mTLS is disabled.\n");
+            printf ("TRM %s is disabled.\n", parmName.c_str());
         }
     }
     else {
         printf ("getRFCParameter Failed : %s\n", getRFCErrorString(status));
+	if (RFC_PARM_qtPort == type){
+            //TRMQtSecurePort default value is enabled.
+            ret = true;
+	}
     }
     return ret;
+}
+
+static void delete_file (QString &fileName)
+{
+    char cmd[256];
+    sprintf(cmd, "%s %s", "rm", fileName.toLatin1().data());
+    exec_sys_command(cmd);
+}
+
+static void executeCommand (std::string command, std::string &output){
+    FILE *fp;
+    int i = 0;
+    int maxResult = 1024;
+    char result[maxResult] = {'\0'};
+    fp = popen(command.c_str(), "r");
+    if (fp == NULL) {
+        printf("\n%s:%d Failed to run command: %s\n", __FUNCTION__, __LINE__, command.c_str());
+        return;
+    }
+
+    i = 0;
+    /* Read the output a line at a time - output it. */
+    while (fgets(result, sizeof(result), fp) != NULL) {
+        if (i++ > maxResult) {
+            break;
+        }
+    }
+    if (maxResult <=i){
+        printf("\n%s:%d command %s . running in endless loop\n", __FUNCTION__, __LINE__, command.c_str());
+    }
+
+    output = result;
+    /* close */
+    pclose(fp);
+    return;
+
+}
+
+static bool selectPk12KeyAndPass (std::string dynKeyFilePath, std::string staticKeyFilePath,
+		std::string &outputKeyFilePath, std::string &pass)
+{
+    bool eRet = true;
+    if (!(access(dynKeyFilePath.c_str(), F_OK) == 0)) {
+        //dynamic pk12 certificate not exists
+        printf("\n%s:%d dynamic pk12 certificate:%s not exists. Pass key wont be generated\n", __FUNCTION__, __LINE__, dynKeyFilePath.c_str());
+        eRet = false;
+    } else {
+        if (!(access(DYNAMIC_PASSCODE_UTILITY, F_OK) == 0)) {
+            //dynamic pk12 pass key generator exists
+            printf("\n%s:%d dynamic pk12 pass key generator not exists\n", __FUNCTION__, __LINE__);
+            eRet = false;
+        }
+
+        pass="";
+        if (true == eRet) {
+            std::string command = DYNAMIC_PASSCODE_UTILITY;
+            command.append (" ");
+            command.append (DYNAMIC_PASSCODE_ARG);
+            executeCommand (command, pass);
+	    //Remove new line if present in the password
+	    pass.erase(std::remove(pass.begin(), pass.end(), '\n'), pass.end());
+        }
+
+        outputKeyFilePath = "";
+        if (!pass.empty()) {
+            outputKeyFilePath = dynKeyFilePath;
+	    printf("\n%s:%d using dynamic pk12 certificate\n", __FUNCTION__, __LINE__);
+            eRet = true;
+            return eRet;
+        } else {
+            printf("\n%s:%d dynamic pk12 pass key null\n", __FUNCTION__, __LINE__);
+        }
+    }
+    printf("\n%s:%d dynamic pk12 certificate check failed\n", __FUNCTION__, __LINE__);
+
+    outputKeyFilePath = ""; pass="";
+    //Not able to setup dynamic key set static key
+    if (!(access(staticKeyFilePath.c_str(), F_OK) == 0)) {
+        //static pk12 certificate not exists
+        printf("\n%s:%d static pk12 certificate:%s not exists\n", __FUNCTION__, __LINE__, staticKeyFilePath.c_str());
+        eRet = false;
+        return eRet;
+    }
+    if (!(access(STATIC_PASSCODE_UTILITY, F_OK) == 0)) {
+        //static pk12 pass key generator exists
+        printf("\n%s:%d static pk12 pass key generator not exists\n", __FUNCTION__, __LINE__);
+        eRet = false;
+        return eRet;
+    }
+
+    pass="";
+    std::string command = STATIC_PASSCODE_UTILITY;
+    command.append (" ");
+    command.append (STATIC_PASSCODE_ARG_FILE);
+    executeCommand (command, pass);
+    if (!(access(STATIC_PASSCODE_ARG_FILE, F_OK) == 0)) {
+        printf("\n%s:%d static config file generation failed\n", __FUNCTION__, __LINE__);
+        eRet = false;
+        return eRet;
+    }
+
+    pass="";
+    command = "cat ";
+    command.append (STATIC_PASSCODE_ARG_FILE);
+    executeCommand (command, pass);
+    //Remove new line if present in the password
+    pass.erase(std::remove(pass.begin(), pass.end(), '\n'), pass.end());
+
+    outputKeyFilePath = "";
+    if (!pass.empty()) {
+        outputKeyFilePath = staticKeyFilePath;
+	printf("\n%s:%d using static pk12 certificate\n", __FUNCTION__, __LINE__);
+        eRet = true;
+        return eRet;
+    } else {
+        printf("\n%s:%d static pk12 pass key null\n", __FUNCTION__, __LINE__);
+    }
+
+    printf("\n%s:%d dynamic and static pk12 certificate check failed\n", __FUNCTION__, __LINE__);
+    //Not expecting to reach here
+    return false;
 }
 
 WebSocketProxy::WebSocketProxy(const QStringList &boundIPs, quint16 port, QObject *parent) :
@@ -210,7 +386,11 @@ WebSocketProxy::WebSocketProxy(const QStringList &boundIPs, quint16 port, QObjec
         QString caChainFile = trmSetting.value( caKeyTagName ).toString();
         QString keyFileName = trmSetting.value( privateKeyTagName  ).toString();
         QString certFileName = trmSetting.value( publicKeyTagName  ).toString();
-        if(caChainFile.isNull() || keyFileName.isNull() || certFileName.isNull()  )
+        QString xpkiDynFilePath = trmSetting.value( xpkiDynamicCertificate  ).toString();
+        QString xpkiStaticFilePath = trmSetting.value( xpkiStaticCertificate  ).toString();
+
+        if(caChainFile.isNull() || keyFileName.isNull() || certFileName.isNull())
+
         {
             std::cout << "Missing TRM configuration information";
         }
@@ -221,62 +401,108 @@ WebSocketProxy::WebSocketProxy(const QStringList &boundIPs, quint16 port, QObjec
             {
                 if (proxyServers.constFind(*it) == proxyServers.constEnd())
                 {
-                    QFile certFile(certFileName);
-                    QFile keyFile(keyFileName);
-                    if(!keyFile.exists())
-                    {
-                        std::cout << "Server private key not exist. Don't start the server ";
-                        break;
-                    }
-                    certFile.open(QIODevice::ReadOnly);
-                    keyFile.open(QIODevice::ReadOnly);
-                    QSslCertificate certificate(&certFile, QSsl::Pem);
-                    QSslKey sslKey(&keyFile, QSsl::Rsa, QSsl::Pem,QSsl::PrivateKey,QByteArray(""));
-                    certFile.close();
-                    keyFile.close();
-                    QSslConfiguration sslConfiguration;
 
-                    if (true == is_RFC_mTLS_enable())
-                    {
-                        std::cout << "QSslSocket peerVerifyMode is QSslSocket::VerifyPeer. " << std::endl;
-                        sslConfiguration.setPeerVerifyMode(QSslSocket::VerifyPeer);
-                    }
-                    else
-                    {
-                        std::cout << "QSslSocket peerVerifyMode is QSslSocket::QueryPeer. " << std::endl;
-                        sslConfiguration.setPeerVerifyMode(QSslSocket::QueryPeer);
-                    }
+                    if(is_TRM_RFC_param_enable(RFC_PARM_qtPort)) {
+                        //If xPKI RFC enabled use xPKI certificates.
+                        std::cout <<"QT secure port enabled"<<std::endl;
 
-                    sslConfiguration.setLocalCertificate(certificate);
-                    sslConfiguration.setPrivateKey(sslKey);
-                    sslConfiguration.setProtocol(QSsl::TlsV1_2);
-                    sslConfiguration.setPeerVerifyDepth(2);
+                        QFile certFile(certFileName);
+                        QFile keyFile(keyFileName);
+                        if(!keyFile.exists())
+                        {
+                            std::cout << "Server private key not exist. Don't start the server ";
+                            break;
+                        }
+                        certFile.open(QIODevice::ReadOnly);
+                        keyFile.open(QIODevice::ReadOnly);
+                        QSslCertificate certificate(&certFile, QSsl::Pem);
+                        QSslKey sslKey(&keyFile, QSsl::Rsa, QSsl::Pem,QSsl::PrivateKey,QByteArray(""));
+                        certFile.close();
+                        keyFile.close();
+                        QSslConfiguration sslConfiguration;
 
-                    QList<QSslCertificate> caCerts = QSslCertificate::fromPath(caChainFile);
+                        if (true == is_TRM_RFC_param_enable(RFC_PARM_mTLS))
+                        {
+                            std::cout << "QSslSocket peerVerifyMode is QSslSocket::VerifyPeer. " << std::endl;
+                            sslConfiguration.setPeerVerifyMode(QSslSocket::VerifyPeer);
+                        }
+                        else
+                        {
+                            std::cout << "QSslSocket peerVerifyMode is QSslSocket::QueryPeer. " << std::endl;
+                            sslConfiguration.setPeerVerifyMode(QSslSocket::QueryPeer);
+                        }
 
-                    sslConfiguration.setCaCertificates(caCerts);
-                    QWebSocketServer *proxyServer = new QWebSocketServer(QString("TRM SecureMode WebsocketServer IP: ") + *it , QWebSocketServer::SecureMode, this);
+                        sslConfiguration.setLocalCertificate(certificate);
+                        sslConfiguration.setPrivateKey(sslKey);
+                        sslConfiguration.setProtocol(QSsl::TlsV1_2);
+                        sslConfiguration.setPeerVerifyDepth(2);
 
-                    proxyServer->setSslConfiguration(sslConfiguration);
+                        QList<QSslCertificate> caCerts = QSslCertificate::fromPath(caChainFile);
 
-                    std::cout << "TRM WebsocketProxy starting server on ip: " <<(*it).toUtf8().data()
+                        sslConfiguration.setCaCertificates(caCerts);
+                        QWebSocketServer *proxyServer = new QWebSocketServer(QString("TRM SecureMode WebsocketServer IP: ") + *it , QWebSocketServer::SecureMode, this);
+
+                        proxyServer->setSslConfiguration(sslConfiguration);
+
+                        std::cout << "TRM WebsocketProxy starting server on ip: " <<(*it).toUtf8().data()
                               <<" SecureMode: "<<proxyServer->secureMode()<< std::endl;
-                    if (proxyServer->listen(QHostAddress(*it), port))
-                    {
-                        connect(proxyServer, SIGNAL(newConnection()), this,
+                        if (proxyServer->listen(QHostAddress(*it), port))
+                        {
+                            connect(proxyServer, SIGNAL(newConnection()), this,
                                 SLOT(onNewConnection()));
-                        connect(proxyServer,&QWebSocketServer::sslErrors ,this,
+                            connect(proxyServer,&QWebSocketServer::sslErrors ,this,
                                 &WebSocketProxy::onSslErrors);
-                        connect(proxyServer, &QWebSocketServer::acceptError, this,
+                            connect(proxyServer, &QWebSocketServer::acceptError, this,
                                 &WebSocketProxy::onAcceptError);
-                        connect(proxyServer, &QWebSocketServer::peerVerifyError, this,
+                            connect(proxyServer, &QWebSocketServer::peerVerifyError, this,
                                 &WebSocketProxy::onPeerVerifyError);
-                        proxyServers[*it] = proxyServer;
+                            proxyServers[*it] = proxyServer;
+                        }
+                        else
+                        {
+                            std::cout << "TRM WebsocketProxy Failed to listen" << std::endl;
+                        }
                     }
-                    else
-                    {
-                        std::cout << "TRM WebsocketProxy Failed to listen" << std::endl;
-                    }
+
+		    std::string pk12keyFilePath = "";
+		    std::string pk12pass = "";
+		    bool isPk12CertAvailable = selectPk12KeyAndPass (xpkiDynFilePath.toStdString(), xpkiStaticFilePath.toStdString(), pk12keyFilePath, pk12pass);
+		    if (isPk12CertAvailable) {
+                        std::cout << "Opening tcpOpensslProxyServer with ip"<<(*it).toStdString().c_str() << std::endl;
+                        tcpOpensslProxyServer *sslProxyServer = new tcpOpensslProxyServer();
+		        sslProxyServer->onMessageReceivedCallBack = onWebsocketMessageReceivedSSL;
+		        sslProxyServer->onPongCallBack = onPongSSL;
+
+                        //Need to specify ip also here. Use port 9990 here using port old secure port 9988
+		        //Will have connection issue with old client boxes since QT auth is not compatible.
+                        int ret = sslProxyServer->setUpServer(
+                                     (*it).toStdString().c_str(), 9990,
+                                     caChainFile.toStdString().c_str(),
+                                     pk12keyFilePath.c_str(),
+                                     pk12pass.c_str());
+                        if (0==ret){
+                            connect(sslProxyServer, SIGNAL(newConnection (int, tcpOpensslProxyServer*)), this,
+                                SLOT(onNewConnectionSSl(int, tcpOpensslProxyServer*)));
+                            connect(sslProxyServer,SIGNAL(sslErrors (QString)) ,this,
+                                SLOT(onSslErrorsSSL(QString)));
+                            connect(sslProxyServer, SIGNAL(acceptError (QString)), this,
+                                SLOT(onAcceptErrorSSL(QString)));
+                            connect(sslProxyServer, SIGNAL(peerVerifyError (QString)), this,
+                                SLOT(onPeerVerifyErrorSSL(QString)));
+
+                            connect(sslProxyServer, SIGNAL(connected (int, QString)), this,
+                                SLOT(onWebsocketConnectSSL(int, QString)));
+                            connect(sslProxyServer, SIGNAL(disconnected (int)), this,
+                                SLOT(onWebsocketDisconnectedSSL(int)));
+                            connect(sslProxyServer, SIGNAL(socketError (QString)), this,
+                                SLOT(onWebsocketErrorSSL(QString)));
+                            sslProxyServers[*it] = sslProxyServer;
+                        } else {
+                            std::cout << "TRM WebsocketProxy Failed to listen" << std::endl;
+                        }
+                    } else {
+                        std::cout << "TRM WebsocketProxy pk12 certificates depenedncies not available" << std::endl;
+		    }
                 }
                 else
                 {
@@ -287,9 +513,7 @@ WebSocketProxy::WebSocketProxy(const QStringList &boundIPs, quint16 port, QObjec
 
                 ++it;
             }
-            char cmd[256];
-            sprintf(cmd, "%s %s", "rm", keyFileName.toLatin1().data());
-            exec_sys_command(cmd);
+            delete_file (keyFileName);
         }
     }
 #endif
@@ -322,6 +546,67 @@ WebSocketProxy::WebSocketProxy(const QStringList &boundIPs, quint16 port, QObjec
 }
 
 #ifdef TRM_USE_SSL
+void WebSocketProxy::onSslErrorsSSL(QString err){
+    std::cout << "onSslErrorsSSL:" << err.toStdString()<<endl;
+}
+void WebSocketProxy::onAcceptErrorSSL(QString err) {
+    std::cout<<"onAcceptErrorSSL occured:"<<err.toStdString()<<endl;
+}
+void WebSocketProxy::onPeerVerifyErrorSSL(QString err) {
+    std::cout<<"onPeerVerifyErrorSSL :"<<err.toStdString()<<endl;
+}
+
+void WebSocketProxy::onWebsocketConnectSSL(int clientId, QString msg)
+{
+    __TIMESTAMP();
+    std::cout << "TRM WebsocketProxy onWebsocketConnectSSL" << std::endl;
+    if (sslProxyPingPongTasks.find(clientId) != sslProxyPingPongTasks.end()){
+        PingPongTask* pp = sslProxyPingPongTasks [clientId];
+        pp->start();
+    }
+}
+
+static void onWebsocketMessageReceivedSSL(int clientId, char* message, size_t len)
+{
+    __TIMESTAMP();
+    std::cout << "TRM WebsocketProxy onWebsocketMessageReceivedSSL msg:" << message << std::endl;
+    websocket_data_callback_with_clientId (clientId, 0, message, len);
+}
+
+static void onPongSSL(int clientId, uint64_t ticks, QByteArray &qmsg)
+{
+    __TIMESTAMP();
+    //std::cout << "TRM WebsocketProxy onPongSSL clientId:" << clientId << std::endl;
+    if (m_proxy->sslProxyPingPongTasks.find(clientId) != m_proxy->sslProxyPingPongTasks.end()){
+        //send to curresponding pingpong object
+        m_proxy->sslProxyPingPongTasks[clientId]->onPong (ticks, qmsg);
+    }
+
+}
+
+void WebSocketProxy::onWebsocketDisconnectedSSL(int clientId) {
+    __TIMESTAMP();
+    std::cout << "TRM WebsocketProxy onWebsocketDisconnectedSSL clientId:"<< clientId << std::endl;
+    if (sslProxyMap.find(clientId) != sslProxyMap.end()){
+        sslProxyMap.erase (clientId);
+    }
+    if (sslProxyPingPongTasks.find(clientId) != sslProxyPingPongTasks.end()){
+        //if existing client mapping present remove it;
+        PingPongTask* oldPp = sslProxyPingPongTasks [clientId];
+        sslProxyPingPongTasks.erase(clientId);
+	oldPp->stop();
+	oldPp->deleteLater();
+    }
+}
+
+void WebSocketProxy::onWebsocketErrorSSL(QString err)
+{
+    __TIMESTAMP();
+    std::cout << "TRM WebsocketProxy onWebsocketErrorSSL = " << err.toStdString()<<endl;
+}
+
+
+
 void WebSocketProxy::onSslErrors(const QList<QSslError> &sslError)
 {
     qDebug() << "onSslErrors :" << sslError;
@@ -336,6 +621,28 @@ void WebSocketProxy::onPeerVerifyError(const QSslError &error)
     qDebug() << "onPeerVerifyError :" << error;
 }
 #endif
+
+
+void WebSocketProxy::onNewConnectionSSl(int clientId, tcpOpensslProxyServer *ss){
+    std::cout<<" WebSocketProxy::onNewConnectionSSl:"<<std::endl;
+    {
+
+        static const char *has_livestream_client_flag_filename ="/tmp/mnt/diska3/persistent/.has_livestream_client";
+        struct stat st;
+
+        int ret = ::lstat(has_livestream_client_flag_filename, &st);
+    }
+    sslProxyMap [clientId] = ss;
+    PingPongTask* ppTask = new PingPongTask(ss, clientId);
+    if (sslProxyPingPongTasks.find(clientId) != sslProxyPingPongTasks.end()){
+        //if existing client mapping present remove it;
+        PingPongTask* oldPP = sslProxyPingPongTasks [clientId];
+        sslProxyPingPongTasks.erase(clientId);
+	oldPP->stop();
+	oldPP->deleteLater();
+    }
+    sslProxyPingPongTasks [clientId] = ppTask;
+}
 
 void WebSocketProxy::onNewConnection()
 {
@@ -382,7 +689,7 @@ void WebSocketProxy::onNewConnection()
     // newConnection() signal already indicates the completion of ws handshake
     websocket_ready_callback((void *)wssocket);
     connections << wssocket;
-    pingPongTasks.insert(wssocket, new PingPongTask(*wssocket));
+    pingPongTasks.insert(wssocket, new PingPongTask(wssocket));
 
     /* Connect() signaled when socket is connected and the handshake was successful */
     connect(wssocket, SIGNAL(connected()), this, SLOT(onWebsocketConnect()));
@@ -479,6 +786,18 @@ void WebSocketProxy::onWebsocketError(QAbstractSocket::SocketError error)
     }
 }
 
+int WebSocketProxy::onWebsocketHasDataToWriteSSL(int clientId, char* data, int len)
+{
+    if (sslProxyMap.find(clientId) != sslProxyMap.end()){
+        tcpOpensslProxyServer *ss = sslProxyMap[clientId];
+        printf ("WebSocketProxy::%s:%d data: masked len:%d\n", __FUNCTION__, __LINE__, len);
+	ss->sendTextMessage (clientId, data, len);
+	return len;
+    } else {
+        return 0;
+    }
+}
+
 void WebSocketProxy::onWebsocketHasDataToWrite(void *conn, void *data)
 {
     /* This is thread safe as the caller of mg_websocket_write() already ensure
@@ -508,6 +827,23 @@ void WebSocketProxy::onRemoveConnection(void *conn)
     }
 }
 
+void WebSocketProxy::onRemoveAllOpenSslConnections() {
+         QMap<QString, tcpOpensslProxyServer *>::iterator iter;
+         for (iter = sslProxyServers.begin(); iter != sslProxyServers.end(); ++iter) {
+             tcpOpensslProxyServer * sslProxyServer = iter.value();
+	     sslProxyServer->closeAllClients();
+         }
+}
+
+int mg_websocket_write_ssl(int clientId, char *data, int data_len)
+{
+    int ret = 0;
+    printf ("%s:%d data masked data_len:%d\n", __FUNCTION__, __LINE__, data_len);
+    if (NULL != m_proxy) {
+        ret = m_proxy->onWebsocketHasDataToWriteSSL (clientId, data, data_len);
+    }
+    return ret;
+}
 
 int mg_websocket_write(void * conn, const char *data, size_t data_len)
 {
@@ -518,6 +854,15 @@ int mg_websocket_write(void * conn, const char *data, size_t data_len)
     QMetaObject::invokeMethod(m_proxy, "onWebsocketHasDataToWrite", Qt::QueuedConnection, Q_ARG(void *, wssocket), Q_ARG(void *, byteArray));
 
     return data_len;
+}
+
+int mg_websocket_close_all_ssl()
+{
+    printf ("%s:%d \n", __FUNCTION__, __LINE__);
+    if (NULL != m_proxy) {
+        m_proxy->onRemoveAllOpenSslConnections();
+    }
+    return 0;
 }
 
 int mg_websocket_close(void * conn)
