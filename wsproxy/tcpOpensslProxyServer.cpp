@@ -151,9 +151,18 @@ SSL_CTX * tcpOpensslProxyServer::get_server_context_pk12(const char *ca_pem,
     X509 *x509;
 
     /* Get a default context */
-    if (!(ctx = SSL_CTX_new(SSLv23_server_method()))) {
+    //TLSv1_2_server_method is for old mips support. Newer versions will support SSLv23_server_method
+    if (!(ctx = SSL_CTX_new(TLSv1_2_server_method()))) {
         fprintf(stderr, "tcpOpensslProxyServer::%s %d SSL_CTX_new failed\n", __FUNCTION__, __LINE__);
         onSslErrors (QString("SSL_CTX_new failed"));
+        return NULL;
+    }
+
+    /*Here 1 the highest preference curve is automatically used for ECDH keys used during key exchange. This is just to support the old mips morty platforms*/
+    if(!SSL_CTX_set_ecdh_auto(ctx, 1)) {
+        fprintf(stderr, "tcpOpensslProxyServer::%s %d SSL_CTX_set_ecdh_auto(ctx, 1)\n",  __FUNCTION__, __LINE__);
+        onSslErrors (QString("failed to set ecdh param"));
+        freeSSLContext (ctx);
         return NULL;
     }
 
@@ -226,7 +235,7 @@ SSL_CTX * tcpOpensslProxyServer::get_server_context_pk12(const char *ca_pem,
                        NULL);
 
         /* We accept only certificates signed only by the CA himself */
-        SSL_CTX_set_verify_depth(ctx, 1);
+        SSL_CTX_set_verify_depth(ctx, 2);
     }
 
     /* Done, return the context */
